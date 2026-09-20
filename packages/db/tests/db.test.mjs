@@ -61,3 +61,26 @@ test('PaperForgeDataStore handles review queue decisions', () => {
   assert.strictEqual(resolved.status, 'RESOLVED');
   assert.strictEqual(resolved.reviewedBy, 'tutor_dr_low');
 });
+
+test('PaperForgeDataStore manages user profiles and RBAC personas', () => {
+  const store = new PaperForgeDataStore();
+
+  const admin = store.getUserById('usr_admin_01');
+  assert.ok(admin);
+  assert.strictEqual(admin.role, 'ADMIN');
+
+  const teacher = store.getUserByEmail('clara.tan@paperforge.sg');
+  assert.ok(teacher);
+  assert.strictEqual(teacher.role, 'TEACHER');
+
+  const newUser = store.upsertUser({
+    id: 'usr_new_01',
+    email: 'new.tutor@paperforge.sg',
+    name: 'Mr. David Tan',
+    role: 'TEACHER',
+  });
+
+  assert.strictEqual(newUser.id, 'usr_new_01');
+  assert.strictEqual(store.getUserById('usr_new_01')?.name, 'Mr. David Tan');
+  assert.strictEqual(store.listUsers().length, 3);
+});

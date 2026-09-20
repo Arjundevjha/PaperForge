@@ -12,6 +12,9 @@ import {
   SystemHealthStatus,
   SubjectId,
   SingaporeSchoolCode,
+  UserProfile,
+  DEFAULT_ADMIN_PROFILE,
+  DEFAULT_TEACHER_PROFILE,
 } from '@paperforge/shared';
 import { generateSeedData, SeedDatabaseData } from './seed';
 
@@ -21,6 +24,7 @@ export class PaperForgeDataStore {
   private answers: Map<string, Answer> = new Map();
   private worksheets: Map<string, Worksheet> = new Map();
   private reviewItems: Map<string, ReviewItem> = new Map();
+  private users: Map<string, UserProfile> = new Map();
 
   constructor(seedData?: SeedDatabaseData) {
     const data = seedData || generateSeedData();
@@ -30,6 +34,9 @@ export class PaperForgeDataStore {
     for (const a of data.answers) this.answers.set(a.questionId, a);
     for (const w of data.worksheets) this.worksheets.set(w.id, w);
     for (const r of data.reviewItems) this.reviewItems.set(r.id, r);
+
+    this.users.set(DEFAULT_ADMIN_PROFILE.id, DEFAULT_ADMIN_PROFILE);
+    this.users.set(DEFAULT_TEACHER_PROFILE.id, DEFAULT_TEACHER_PROFILE);
   }
 
   // Sources
@@ -157,6 +164,27 @@ export class PaperForgeDataStore {
     item.reviewedAt = new Date().toISOString();
     item.details = { ...item.details, decision, notes };
     return item;
+  }
+
+  // Users & Auth
+  getUserById(id: string): UserProfile | undefined {
+    return this.users.get(id);
+  }
+
+  getUserByEmail(email: string): UserProfile | undefined {
+    for (const u of this.users.values()) {
+      if (u.email.toLowerCase() === email.toLowerCase()) return u;
+    }
+    return undefined;
+  }
+
+  upsertUser(user: UserProfile): UserProfile {
+    this.users.set(user.id, user);
+    return user;
+  }
+
+  listUsers(): UserProfile[] {
+    return Array.from(this.users.values());
   }
 
   // System status

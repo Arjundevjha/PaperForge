@@ -254,3 +254,28 @@ export interface SystemHealthStatus {
   databaseConnected: boolean;
   storageConnected: boolean;
 }
+
+export type UserRole = 'ADMIN' | 'TEACHER';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  avatarUrl?: string;
+}
+
+export const DEFAULT_ADMIN_PROFILE: UserProfile = {
+  id: 'usr_admin_01',
+  email: 'adrian.low@paperforge.sg',
+  name: 'Dr. Adrian Low',
+  role: 'ADMIN',
+};
+
+export const DEFAULT_TEACHER_PROFILE: UserProfile = {
+  id: 'usr_teacher_01',
+  email: 'clara.tan@paperforge.sg',
+  name: 'Ms. Clara Tan',
+  role: 'TEACHER',
+};
+

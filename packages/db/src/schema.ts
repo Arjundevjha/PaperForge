@@ -108,6 +108,16 @@ export const reviewItemsTable = pgTable('review_items', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+export const usersTable = pgTable('users', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  role: text('role').notNull().default('TEACHER'), // 'ADMIN' | 'TEACHER'
+  avatarUrl: text('avatar_url'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const auditLogsTable = pgTable('audit_logs', {
   id: text('id').primaryKey(),
   actorId: text('actor_id').notNull(),
