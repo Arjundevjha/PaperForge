@@ -15,10 +15,8 @@ export function normalizeText(raw: string): string {
     .toLowerCase()
     // remove LaTeX math delimiters if present
     .replace(/[$$\\]/g, ' ')
-    // normalize whitespace
-    .replace(/\s+/g, ' ')
-    // strip non-alphanumeric except basic math ops
-    .replace(/[^a-z0-9+\-=/*()]/gi, ' ')
+    // strip punctuation including parentheses, commas, colons, brackets
+    .replace(/[^a-z0-9+\-=/*]/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
