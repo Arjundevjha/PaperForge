@@ -1,0 +1,11 @@
+{
+  "name": "@paperforge/db",
+  "version": "1.0.0",
+  "description": "PaperForge database schemas, Drizzle ORM models, and repository layer",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@paperforge/shared": "*",
+    "drizzle-orm": "^0.33.0"
+  }
+}
