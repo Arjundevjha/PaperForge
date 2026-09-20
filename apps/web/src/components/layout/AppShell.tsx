@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -34,6 +34,21 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Global Keyboard Shortcuts (Ctrl+K / Cmd+K and Escape)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setSearchOpen(false);
+        setSubjectMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const navItems = [
     { label: 'Teacher Resource Hub', href: '/', icon: FileSpreadsheet },
     { label: 'PaperForge Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -52,7 +67,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         <div>
           {/* Brand Header with PaperForge Mark SVG */}
           <div className="h-16 flex items-center px-4 gap-3 border-b border-border-subdued">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="30" height="30" className="flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="30" height="30" className="flex-shrink-0" aria-hidden="true">
               <rect width="40" height="40" rx="6" fill="#111827"/>
               <path d="M11 9H23L29 15V31H11V9Z" stroke="#00E5FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="#0c131d"/>
               <path d="M23 9V15H29" stroke="#00E5FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -66,13 +81,13 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <span className="font-bold text-sm text-[#f1f5f9] tracking-tight">PaperForge</span>
                 <span className="text-[10px] font-mono px-1 py-0.5 rounded bg-[#171c26] text-primary-cyan border border-primary-cyan/30">H2</span>
               </div>
-              <p className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider">A-Level Foundry</p>
+              <p className="text-[10px] text-[#94a3b8] font-mono uppercase tracking-wider">A-Level Foundry</p>
             </div>
           </div>
 
           {/* Navigation Links */}
-          <nav className="p-3 space-y-1">
-            <div className="px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-[#64748b]">
+          <nav className="p-3 space-y-1" aria-label="Main Navigation">
+            <div className="px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-[#94a3b8]">
               Core Workflows
             </div>
             {navItems.map((item) => {
@@ -82,6 +97,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`flex items-center justify-between px-3 py-2 rounded text-xs transition-all ${
                     isActive
                       ? 'bg-surface-2 text-primary-cyan font-medium border-l-2 border-primary-cyan'
@@ -89,11 +105,14 @@ export const AppShell: React.FC<AppShellProps> = ({
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Icon size={16} className={isActive ? 'text-primary-cyan' : 'text-[#64748b]'} />
+                    <Icon size={16} className={isActive ? 'text-primary-cyan' : 'text-[#94a3b8]'} />
                     <span>{item.label}</span>
                   </div>
                   {item.badge && (
-                    <span className="text-[10px] font-mono bg-status-warning/20 text-status-warning border border-status-warning/40 px-1.5 py-0.5 rounded-full">
+                    <span
+                      aria-label={`${item.badge} pending review items`}
+                      className="text-[10px] font-mono bg-status-warning/20 text-status-warning border border-status-warning/40 px-1.5 py-0.5 rounded-full"
+                    >
                       {item.badge}
                     </span>
                   )}
@@ -126,6 +145,9 @@ export const AppShell: React.FC<AppShellProps> = ({
             <div className="relative">
               <button
                 onClick={() => setSubjectMenuOpen(!subjectMenuOpen)}
+                aria-haspopup="listbox"
+                aria-expanded={subjectMenuOpen}
+                aria-label="Select A-Level Subject"
                 className="flex items-center gap-2 px-3 py-1.5 rounded bg-surface-2 border border-border-active hover:border-primary-cyan text-xs font-medium text-[#f1f5f9] transition-colors"
               >
                 <span
@@ -133,23 +155,30 @@ export const AppShell: React.FC<AppShellProps> = ({
                   style={{ backgroundColor: currentMeta.themeColor }}
                 />
                 <span>{currentMeta.name}</span>
-                <span className="font-mono text-[#64748b]">[{currentMeta.syllabusCode}]</span>
-                <ChevronDown size={14} className="text-[#64748b]" />
+                <span className="font-mono text-[#94a3b8]">[{currentMeta.syllabusCode}]</span>
+                <ChevronDown size={14} className="text-[#94a3b8]" />
               </button>
 
               {subjectMenuOpen && (
-                <div className="absolute left-0 mt-1 w-56 bg-surface-2 border border-border-active rounded shadow-xl py-1 z-50">
+                <div
+                  role="listbox"
+                  aria-label="A-Level Subjects"
+                  className="absolute left-0 mt-1 w-56 bg-surface-2 border border-border-active rounded shadow-xl py-1 z-50"
+                >
                   {(Object.keys(SUBJECT_METADATA) as SubjectId[]).map((subjId) => {
                     const meta = SUBJECT_METADATA[subjId];
+                    const isSelected = subjId === activeSubject;
                     return (
                       <button
                         key={subjId}
+                        role="option"
+                        aria-selected={isSelected}
                         onClick={() => {
                           onSubjectChange(subjId);
                           setSubjectMenuOpen(false);
                         }}
                         className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-surface-3 transition-colors ${
-                          subjId === activeSubject ? 'text-primary-cyan font-semibold' : 'text-[#dee2f1]'
+                          isSelected ? 'text-primary-cyan font-semibold' : 'text-[#dee2f1]'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -159,7 +188,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                           />
                           <span>{meta.name}</span>
                         </div>
-                        <span className="font-mono text-[10px] text-[#64748b]">[{meta.syllabusCode}]</span>
+                        <span className="font-mono text-[10px] text-[#94a3b8]">[{meta.syllabusCode}]</span>
                       </button>
                     );
                   })}
@@ -171,7 +200,8 @@ export const AppShell: React.FC<AppShellProps> = ({
             <div className="relative">
               <button
                 onClick={() => setSearchOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded bg-surface-2/60 border border-border-subdued hover:border-border-active text-xs text-[#64748b] w-64 text-left transition-colors"
+                aria-label="Open global search (Ctrl+K)"
+                className="flex items-center gap-2 px-3 py-1.5 rounded bg-surface-2/60 border border-border-subdued hover:border-border-active text-xs text-[#94a3b8] hover:text-[#dee2f1] w-64 text-left transition-colors"
               >
                 <Search size={14} />
                 <span>Search 16 JCs, topics... (Ctrl+K)</span>
@@ -192,7 +222,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
               <div className="text-right">
                 <div className="text-xs font-medium text-[#f1f5f9]">Dr. Adrian Low</div>
-                <div className="text-[10px] text-[#64748b]">Senior Tuition Specialist</div>
+                <div className="text-[10px] text-[#94a3b8]">Senior Tuition Specialist</div>
               </div>
             </div>
           </div>
@@ -206,13 +236,19 @@ export const AppShell: React.FC<AppShellProps> = ({
 
       {/* Search Modal */}
       {searchOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Quick Search"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
           <div className="w-full max-w-xl bg-surface-2 border border-border-active rounded-lg shadow-2xl p-4">
             <div className="flex items-center gap-2 pb-3 border-b border-border-subdued">
               <Search size={18} className="text-primary-cyan" />
               <input
                 type="text"
                 autoFocus
+                aria-label="Search questions, chapters, or Junior Colleges"
                 placeholder="Search by keyword, JC (e.g. RI, HCI, NYJC), chapter, or question code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -220,13 +256,14 @@ export const AppShell: React.FC<AppShellProps> = ({
               />
               <button
                 onClick={() => setSearchOpen(false)}
+                aria-label="Close search modal"
                 className="text-xs px-2 py-1 bg-surface-1 border border-border-subdued rounded text-[#94a3b8] hover:text-white"
               >
                 ESC
               </button>
             </div>
-            <div className="py-4 text-xs text-[#64748b] space-y-2">
-              <p className="font-mono text-[10px] uppercase">Quick Suggestions</p>
+            <div className="py-4 text-xs text-[#94a3b8] space-y-2">
+              <p className="font-mono text-[10px] uppercase text-[#94a3b8]">Quick Suggestions</p>
               <div className="flex flex-wrap gap-1.5">
                 {['[RI 2025 H2 Chemistry]', '2,4-DNPH precipitate', 'Centripetal acceleration', 'Volume of revolution', 'Enzyme kinetics Km'].map(
                   (sug) => (

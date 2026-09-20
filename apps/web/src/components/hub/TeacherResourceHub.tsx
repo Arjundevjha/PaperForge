@@ -159,7 +159,16 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
               return (
                 <div
                   key={ws.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-selected={isSelected}
                   onClick={() => setSelectedWorksheetId(ws.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedWorksheetId(ws.id);
+                    }
+                  }}
                   className={`p-5 rounded-lg border transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-surface-2 border-primary-cyan shadow-cyan-glow'
@@ -252,7 +261,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
       </div>
 
       {/* Right Column (~42% width): Live Cambridge A4 Print Preview Canvas */}
-      <div className="w-[42%] h-full flex flex-col bg-[#080b0f] overflow-hidden">
+      <div className="w-[42%] print:w-full print:p-0 print:border-none print:bg-white h-full flex flex-col bg-[#080b0f] overflow-hidden">
         {/* Canvas Toolbar */}
         <div className="no-print h-14 px-4 border-b border-border-subdued bg-surface-1 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -264,6 +273,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
             {/* Marking Guide Toggle */}
             <button
               onClick={() => setShowMarkingScheme(!showMarkingScheme)}
+              aria-pressed={showMarkingScheme}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${
                 showMarkingScheme
                   ? 'bg-status-approved/20 text-status-approved border border-status-approved/40 font-semibold'
@@ -382,7 +392,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
             </div>
 
             {/* Red Dashed Cambridge Page Boundary Marker */}
-            <div className="mt-8 pt-4 border-t-2 border-dashed border-[#ef4444] text-center">
+            <div className="no-print mt-8 pt-4 border-t-2 border-dashed border-[#ef4444] text-center">
               <span className="font-mono text-[9px] text-[#ef4444] tracking-wider uppercase font-semibold bg-white px-2">
                 PAGE BREAK (PRINT BOUNDARY • PAGE 1 OF {Math.max(1, Math.ceil(worksheetQuestions.length / 3))})
               </span>

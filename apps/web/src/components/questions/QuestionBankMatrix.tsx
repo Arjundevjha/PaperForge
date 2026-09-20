@@ -74,11 +74,12 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
           <div className="flex items-center gap-3">
             {/* Search Input */}
             <div className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-2.5 text-[#64748b]" />
+              <Search size={14} className="absolute left-3 top-2.5 text-[#94a3b8]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search question text, citation, formula"
                 placeholder="Search question text, citation, formula..."
                 className="w-full bg-surface-2 border border-border-subdued focus:border-primary-cyan rounded pl-9 pr-3 py-1.5 text-xs text-[#dee2f1] focus:outline-none"
               />
@@ -88,6 +89,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
             <select
               value={selectedSchool}
               onChange={(e) => setSelectedSchool(e.target.value)}
+              aria-label="Filter questions by Singapore Junior College"
               className="bg-surface-2 border border-border-subdued rounded px-3 py-1.5 text-xs text-[#dee2f1] focus:outline-none"
             >
               <option value="all">All Singapore JCs</option>
@@ -107,7 +109,16 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
             return (
               <div
                 key={q.id}
+                role="button"
+                tabIndex={0}
+                aria-selected={isSelected}
                 onClick={() => setSelectedQuestion(q)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedQuestion(q);
+                  }
+                }}
                 className={`p-4 cursor-pointer transition-colors ${
                   isSelected
                     ? 'bg-surface-2 border-l-2 border-primary-cyan'
@@ -119,7 +130,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
                     <span className="font-mono text-xs font-bold text-primary-cyan bg-[#091822] px-1.5 py-0.5 rounded border border-primary-cyan/30">
                       {q.questionNumber}
                     </span>
-                    <span className="font-mono text-xs text-[#64748b]">
+                    <span className="font-mono text-xs text-[#94a3b8]">
                       {q.provenance.citation}
                     </span>
                   </div>

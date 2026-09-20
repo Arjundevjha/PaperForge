@@ -39,7 +39,12 @@ body {
 
 /* Print Media Styles per design.md */
 @media print {
-  body {
+  html,
+  body,
+  .flex,
+  main {
+    overflow: visible !important;
+    height: auto !important;
     background-color: #ffffff !important;
     color: #000000 !important;
   }
@@ -59,6 +64,7 @@ body {
     padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+    transform: none !important;
   }
 
   @page {

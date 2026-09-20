@@ -64,7 +64,16 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({ initialItems }) => {
             return (
               <div
                 key={item.id}
+                role="button"
+                tabIndex={0}
+                aria-selected={isSelected}
                 onClick={() => setSelectedId(item.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedId(item.id);
+                  }
+                }}
                 className={`p-4 cursor-pointer transition-colors ${
                   isSelected
                     ? 'bg-surface-2 border-l-2 border-primary-cyan'
@@ -90,7 +99,7 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({ initialItems }) => {
                   Entity: {item.entityId} ({item.entityType})
                 </div>
 
-                <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#64748b] font-mono">
+                <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#94a3b8] font-mono">
                   <span>Confidence: {(item.confidence * 100).toFixed(0)}%</span>
                   <span>{new Date(item.createdAt).toLocaleDateString()}</span>
                 </div>
@@ -105,7 +114,7 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({ initialItems }) => {
         {selectedItem ? (
           <>
             <div>
-              <div className="text-xs font-mono text-[#64748b]">
+              <div className="text-xs font-mono text-[#94a3b8]">
                 REVIEW ITEM #{selectedItem.id}
               </div>
               <h2 className="text-lg font-bold text-[#f1f5f9] mt-1">
@@ -118,7 +127,7 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({ initialItems }) => {
 
             {/* Diagnostic Information */}
             <div className="p-4 rounded-lg bg-surface-2 border border-border-subdued space-y-3">
-              <div className="text-xs font-mono text-[#64748b] uppercase">
+              <div className="text-xs font-mono text-[#94a3b8] uppercase">
                 Diagnostic Telemetry
               </div>
               <pre className="text-xs font-mono text-[#cbd5e1] p-3 rounded bg-surface-1 overflow-x-auto">
@@ -136,6 +145,7 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({ initialItems }) => {
                 <textarea
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}
+                  aria-label="Reviewer decision resolution notes"
                   placeholder="Add notes for audit log (e.g. verified against 2026 syllabus guidelines)..."
                   className="w-full h-20 p-2.5 rounded bg-surface-1 border border-border-subdued text-xs text-[#dee2f1] focus:outline-none focus:border-primary-cyan"
                 />

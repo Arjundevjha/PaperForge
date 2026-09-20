@@ -51,14 +51,23 @@ export const SyllabusExplorer: React.FC<SyllabusExplorerProps> = ({ activeSubjec
               className="rounded-lg bg-surface-1 border border-border-subdued overflow-hidden"
             >
               <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={isExpanded}
                 onClick={() => toggleChapter(ch.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleChapter(ch.id);
+                  }
+                }}
                 className="p-4 flex items-center justify-between cursor-pointer hover:bg-surface-2 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   {isExpanded ? (
                     <ChevronDown size={16} className="text-primary-cyan" />
                   ) : (
-                    <ChevronRight size={16} className="text-[#64748b]" />
+                    <ChevronRight size={16} className="text-[#94a3b8]" />
                   )}
                   <div>
                     <div className="flex items-center gap-2">
@@ -72,7 +81,7 @@ export const SyllabusExplorer: React.FC<SyllabusExplorerProps> = ({ activeSubjec
                     <p className="text-xs text-[#94a3b8] mt-0.5">{ch.description}</p>
                   </div>
                 </div>
-                <span className="text-xs font-mono text-[#64748b]">
+                <span className="text-xs font-mono text-[#94a3b8]">
                   {ch.subtopics.length} Subtopics
                 </span>
               </div>
