@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getGlobalStore } from '@paperforge/db';
-import { ReviewItem } from '@paperforge/shared';
+import { ReviewItem, ReviewResolutionPayloadSchema } from '@paperforge/shared';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const status = searchParams.get('status') as ReviewItem['status'] | null;
+  const statusParam = searchParams.get('status');
+  const allowedStatuses = ['PENDING', 'RESOLVED', 'DISMISSED'] as const;
+  const status = allowedStatuses.includes(statusParam as any) ? (statusParam as ReviewItem['status']) : undefined;
 
   const store = getGlobalStore();
-  const items = store.listReviewItems(status || undefined);
+  const items = store.listReviewItems(status);
 
   return NextResponse.json({
     success: true,
@@ -18,15 +20,19 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const body = await request.json();
-    const { id, decision, reviewerId, notes } = body;
+    const rawBody = await request.json();
+    const parsed = ReviewResolutionPayloadSchema.safeParse(rawBody);
 
-    if (!id || !decision) {
-      return NextResponse.json({ error: 'Missing id or decision' }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid review payload', details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
 
+    const { id, decision, reviewerId, notes, resolutionNotes } = parsed.data;
     const store = getGlobalStore();
-    const updated = store.resolveReviewItem(id, decision, reviewerId || 'Admin', notes);
+    const updated = store.resolveReviewItem(id, decision, reviewerId, notes || resolutionNotes);
 
     if (!updated) {
       return NextResponse.json({ error: 'Review item not found' }, { status: 404 });

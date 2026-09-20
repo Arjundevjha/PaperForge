@@ -61,3 +61,24 @@ test('generateAnswerKeyPdf generates non-empty valid answer key PDF', async () =
   const header = Buffer.from(pdfBytes.slice(0, 5)).toString();
   assert.strictEqual(header, '%PDF-');
 });
+
+test('validatePdfBuffer validates authentic PDF magic signature and rejects invalid files', async () => {
+  const { validatePdfBuffer } = await import('../src/validator.ts');
+
+  // Valid PDF bytes
+  const validBuffer = Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\n');
+  const validResult = validatePdfBuffer(validBuffer);
+  assert.strictEqual(validResult.valid, true);
+  assert.strictEqual(validResult.pdfVersion, '1.7');
+
+  // Corrupt non-PDF bytes (e.g. text/html/executable)
+  const corruptBuffer = Buffer.from('<html><body>Fake PDF</body></html>');
+  const invalidResult = validatePdfBuffer(corruptBuffer);
+  assert.strictEqual(invalidResult.valid, false);
+  assert.ok(invalidResult.error?.includes('Missing %PDF-'));
+
+  // Oversized buffer
+  const largeResult = validatePdfBuffer(validBuffer, 10); // max 10 bytes limit
+  assert.strictEqual(largeResult.valid, false);
+  assert.ok(largeResult.error?.includes('exceeds allowed limit'));
+});

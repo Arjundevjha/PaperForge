@@ -58,10 +58,11 @@ export const WorksheetManifestSchema = z.object({
 });
 
 export const ReviewResolutionPayloadSchema = z.object({
-  reviewItemId: z.string().min(1),
+  id: z.string().min(1),
   decision: z.enum(['APPROVE', 'REJECT', 'OVERRIDE', 'MERGE']),
   resolutionNotes: z.string().optional(),
+  notes: z.string().optional(),
   overrideChapter: z.string().optional(),
   overrideMarks: z.number().int().optional(),
-  reviewerId: z.string().min(1),
+  reviewerId: z.string().optional().default('Admin'),
 });
