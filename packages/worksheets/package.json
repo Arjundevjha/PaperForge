@@ -1,0 +1,11 @@
+{
+  "name": "@paperforge/worksheets",
+  "version": "1.0.0",
+  "description": "Automated chapter-based worksheet manifest engine and answer-key synchronizer",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@paperforge/shared": "*",
+    "@paperforge/pdf": "*"
+  }
+}
