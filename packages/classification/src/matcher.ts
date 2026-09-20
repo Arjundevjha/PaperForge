@@ -46,6 +46,9 @@ export function classifyQuestionContent(
       }
     }
 
+    let chapterBestSubtopic: SyllabusSubtopic | undefined = undefined;
+    let maxSubMatches = 0;
+
     for (const sub of chapter.subtopics) {
       let subMatches = 0;
       for (const kw of sub.keywords) {
@@ -55,8 +58,9 @@ export function classifyQuestionContent(
         }
       }
 
-      if (subMatches > 0 && (!bestSubtopic || subMatches > chapterMatches)) {
-        bestSubtopic = sub;
+      if (subMatches > maxSubMatches) {
+        maxSubMatches = subMatches;
+        chapterBestSubtopic = sub;
       }
       chapterMatches += subMatches;
     }
@@ -64,6 +68,7 @@ export function classifyQuestionContent(
     if (chapterMatches > highestScore) {
       highestScore = chapterMatches;
       bestChapter = chapter;
+      bestSubtopic = chapterBestSubtopic;
       matchedWords = [...new Set(currentMatched)];
     }
   }

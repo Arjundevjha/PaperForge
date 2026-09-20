@@ -10,8 +10,9 @@
   "scripts": {
     "dev": "npm --workspace=apps/web run dev",
     "build": "npm --workspaces run build --if-present",
-    "test": "npx tsx --test packages/*/tests/**/*.test.mjs",
+    "test": "npx tsx --test packages/*/tests/**/*.test.mjs tests/**/*.test.mjs",
     "test:unit": "npx tsx --test packages/*/tests/**/*.test.mjs",
+    "test:e2e": "npx tsx --test tests/**/*.test.mjs",
     "scan:security": "echo 'Running Snyk security scan...'"
   },
   "keywords": [

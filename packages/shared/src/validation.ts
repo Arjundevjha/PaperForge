@@ -57,12 +57,17 @@ export const WorksheetManifestSchema = z.object({
   frozenAt: z.string().datetime(),
 });
 
-export const ReviewResolutionPayloadSchema = z.object({
-  id: z.string().min(1),
-  decision: z.enum(['APPROVE', 'REJECT', 'OVERRIDE', 'MERGE']),
-  resolutionNotes: z.string().optional(),
-  notes: z.string().optional(),
-  overrideChapter: z.string().optional(),
-  overrideMarks: z.number().int().optional(),
-  reviewerId: z.string().optional().default('Admin'),
-});
+export const ReviewResolutionPayloadSchema = z
+  .object({
+    id: z.string().optional(),
+    reviewItemId: z.string().optional(),
+    decision: z.enum(['APPROVE', 'REJECT', 'OVERRIDE', 'MERGE']),
+    resolutionNotes: z.string().optional(),
+    notes: z.string().optional(),
+    overrideChapter: z.string().optional(),
+    overrideMarks: z.number().int().optional(),
+    reviewerId: z.string().optional().default('Admin'),
+  })
+  .refine((data) => Boolean(data.id || data.reviewItemId), {
+    message: 'Either id or reviewItemId must be provided',
+  });

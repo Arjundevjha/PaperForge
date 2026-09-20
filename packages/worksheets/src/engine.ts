@@ -82,15 +82,17 @@ export function buildWorksheetManifest(
 ): WorksheetManifest {
   const totalMarks = questions.reduce((acc, q) => acc + (q.marks || 0), 0);
 
-  return {
+  const manifest: WorksheetManifest = {
     worksheetId,
     version,
     subject,
     chapter,
-    questions: questions.map((q) => q.id),
+    questions: Object.freeze(questions.map((q) => q.id)) as unknown as string[],
     totalMarks,
     frozenAt: new Date().toISOString(),
   };
+
+  return Object.freeze(manifest);
 }
 
 export async function compileWorksheetDocuments(
@@ -105,7 +107,22 @@ export async function compileWorksheetDocuments(
     );
   }
 
-  // Invariant 2: Answers must match questions 1:1
+  // Invariant 1b: Exact question ID sequence order must match manifest
+  for (let i = 0; i < questions.length; i++) {
+    if (questions[i].id !== worksheet.manifest.questions[i]) {
+      throw new Error(
+        `Invariant violation: question ID sequence mismatch at position ${i} (expected ${worksheet.manifest.questions[i]}, got ${questions[i].id})`
+      );
+    }
+  }
+
+  // Invariant 2: Answers must match questions 1:1 with identical count
+  if (answers.length !== questions.length) {
+    throw new Error(
+      `Invariant violation: answer count (${answers.length}) does not match question count (${questions.length})`
+    );
+  }
+
   const answerMap = new Map<string, Answer>();
   for (const a of answers) {
     answerMap.set(a.questionId, a);

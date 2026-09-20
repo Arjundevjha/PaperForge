@@ -30,9 +30,10 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const { id, decision, reviewerId, notes, resolutionNotes } = parsed.data;
+    const { id, reviewItemId, decision, reviewerId, notes, resolutionNotes } = parsed.data;
+    const targetId = (id || reviewItemId)!;
     const store = getGlobalStore();
-    const updated = store.resolveReviewItem(id, decision, reviewerId, notes || resolutionNotes);
+    const updated = store.resolveReviewItem(targetId, decision, reviewerId, notes || resolutionNotes);
 
     if (!updated) {
       return NextResponse.json({ error: 'Review item not found' }, { status: 404 });

@@ -53,7 +53,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
     if (ws.subject !== activeSubject) return false;
     if (selectedChapterId === 'all') return true;
     const ch = currentSyllabus.chapters.find((c) => c.id === selectedChapterId);
-    return ch ? ws.chapter.toLowerCase().includes(ch.name.toLowerCase().split(' ')[0]) : true;
+    return ch ? ws.chapter.trim().toLowerCase() === ch.name.trim().toLowerCase() : true;
   });
 
   const activeWorksheet =
