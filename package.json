@@ -1,0 +1,26 @@
+{
+  "name": "paperforge-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated Singapore GCE A-Level Question-Bank and Worksheet-Generation Platform",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace=apps/web run dev",
+    "build": "npm --workspaces run build --if-present",
+    "test": "node --test tests/**/*.test.mjs packages/*/tests/**/*.test.mjs",
+    "test:unit": "node --test packages/*/tests/**/*.test.mjs tests/**/*.test.mjs",
+    "scan:security": "echo 'Running Snyk security scan...'"
+  },
+  "keywords": [
+    "a-level",
+    "singapore-cambridge",
+    "question-bank",
+    "worksheet-generation",
+    "pdf-pipeline"
+  ],
+  "author": "PaperForge Team",
+  "license": "UNLICENSED"
+}

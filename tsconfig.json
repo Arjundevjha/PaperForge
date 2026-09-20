@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "declaration": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@paperforge/shared": ["packages/shared/src/index.ts"],
+      "@paperforge/shared/*": ["packages/shared/src/*"],
+      "@paperforge/questions": ["packages/questions/src/index.ts"],
+      "@paperforge/dedup": ["packages/dedup/src/index.ts"],
+      "@paperforge/classification": ["packages/classification/src/index.ts"],
+      "@paperforge/pdf": ["packages/pdf/src/index.ts"],
+      "@paperforge/worksheets": ["packages/worksheets/src/index.ts"],
+      "@paperforge/db": ["packages/db/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".next"]
+}
