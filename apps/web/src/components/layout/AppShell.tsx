@@ -15,8 +15,12 @@ import {
   ChevronDown,
   UserCheck,
   Sparkles,
+  LogOut,
+  User,
+  Shield,
 } from 'lucide-react';
 import { SubjectId, SUBJECT_METADATA } from '@paperforge/shared';
+import { useAuth } from '../auth/AuthProvider';
 
 export interface AppShellProps {
   children: React.ReactNode;
@@ -30,7 +34,9 @@ export const AppShell: React.FC<AppShellProps> = ({
   onSubjectChange,
 }) => {
   const pathname = usePathname();
+  const { user, role, isAdmin, signOut, switchPersona, isSupabaseConfigured } = useAuth();
   const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -216,14 +222,104 @@ export const AppShell: React.FC<AppShellProps> = ({
               <span>Sync: 18 Sep 2026 • Operational</span>
             </div>
 
-            <div className="flex items-center gap-2 pl-2 border-l border-border-subdued">
-              <div className="w-7 h-7 rounded-full bg-surface-2 border border-primary-cyan/40 flex items-center justify-center text-primary-cyan">
-                <UserCheck size={14} />
-              </div>
-              <div className="text-right">
-                <div className="text-xs font-medium text-[#f1f5f9]">Dr. Adrian Low</div>
-                <div className="text-[10px] text-[#94a3b8]">Senior Tuition Specialist</div>
-              </div>
+            <div className="relative pl-2 border-l border-border-subdued">
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                aria-haspopup="true"
+                aria-expanded={userMenuOpen}
+                aria-label="User profile and account settings"
+                className="flex items-center gap-2.5 p-1 rounded hover:bg-surface-2 transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-surface-2 border border-primary-cyan/40 flex items-center justify-center text-primary-cyan">
+                  <UserCheck size={16} />
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <span className="text-xs font-medium text-[#f1f5f9]">{user.name}</span>
+                    <span
+                      className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                        role === 'ADMIN'
+                          ? 'bg-status-approved/20 text-status-approved border border-status-approved/30 font-bold'
+                          : 'bg-azure/20 text-azure border border-azure/30 font-bold'
+                      }`}
+                    >
+                      {role}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-[#94a3b8]">{user.email}</div>
+                </div>
+              </button>
+
+              {userMenuOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-surface-2 border border-border-active rounded-lg shadow-2xl p-2 z-50 space-y-2">
+                  <div className="p-2 border-b border-border-subdued">
+                    <div className="text-xs font-semibold text-[#f1f5f9]">{user.name}</div>
+                    <div className="text-[11px] font-mono text-[#94a3b8]">{user.email}</div>
+                    <div className="mt-1 inline-block text-[10px] font-mono px-2 py-0.5 rounded bg-surface-1 border border-border-subdued text-primary-cyan">
+                      Assigned Role: {role}
+                    </div>
+                  </div>
+
+                  {/* Dev Persona Switcher (only shown when Supabase env is not active) */}
+                  {!isSupabaseConfigured && switchPersona && (
+                    <div className="p-2 bg-surface-1 rounded space-y-1.5 border border-border-subdued">
+                      <div className="text-[10px] font-mono uppercase text-[#94a3b8]">
+                        Dev Role Switcher
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        <button
+                          onClick={() => {
+                            switchPersona('ADMIN');
+                            setUserMenuOpen(false);
+                          }}
+                          className={`px-2 py-1 rounded text-[11px] font-mono text-center transition-colors ${
+                            role === 'ADMIN'
+                              ? 'bg-status-approved text-black font-bold'
+                              : 'bg-surface-2 text-[#cbd5e1] hover:text-white'
+                          }`}
+                        >
+                          ADMIN
+                        </button>
+                        <button
+                          onClick={() => {
+                            switchPersona('TEACHER');
+                            setUserMenuOpen(false);
+                          }}
+                          className={`px-2 py-1 rounded text-[11px] font-mono text-center transition-colors ${
+                            role === 'TEACHER'
+                              ? 'bg-azure text-black font-bold'
+                              : 'bg-surface-2 text-[#cbd5e1] hover:text-white'
+                          }`}
+                        >
+                          TEACHER
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-1 flex flex-col gap-1">
+                    <Link
+                      href="/login"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-surface-3 text-xs text-[#dee2f1] transition-colors"
+                    >
+                      <Shield size={14} className="text-primary-cyan" />
+                      <span>{isSupabaseConfigured ? 'Account Settings' : 'Supabase Login Screen'}</span>
+                    </Link>
+
+                    <button
+                      onClick={async () => {
+                        await signOut();
+                        setUserMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-status-error/10 text-xs text-status-error transition-colors text-left"
+                    >
+                      <LogOut size={14} />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

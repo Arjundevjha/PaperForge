@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { AuthProvider } from '../components/auth/AuthProvider';
 
 export const metadata: Metadata = {
   title: 'PaperForge — Automated A-Level Question Bank & Worksheet Foundry',
@@ -23,7 +24,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-chassis text-[#dee2f1] antialiased selection:bg-primary-cyan selection:text-black">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

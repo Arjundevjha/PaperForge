@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getGlobalStore } from '@paperforge/db';
 import { ReviewItem, ReviewResolutionPayloadSchema } from '@paperforge/shared';
+import { getCurrentUser } from '../../../lib/auth';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const user = await getCurrentUser();
     const rawBody = await request.json();
     const parsed = ReviewResolutionPayloadSchema.safeParse(rawBody);
 
@@ -32,8 +34,9 @@ export async function PATCH(request: Request) {
 
     const { id, reviewItemId, decision, reviewerId, notes, resolutionNotes } = parsed.data;
     const targetId = (id || reviewItemId)!;
+    const resolvedReviewer = reviewerId || user.name || user.id;
     const store = getGlobalStore();
-    const updated = store.resolveReviewItem(targetId, decision, reviewerId, notes || resolutionNotes);
+    const updated = store.resolveReviewItem(targetId, decision, resolvedReviewer, notes || resolutionNotes);
 
     if (!updated) {
       return NextResponse.json({ error: 'Review item not found' }, { status: 404 });
