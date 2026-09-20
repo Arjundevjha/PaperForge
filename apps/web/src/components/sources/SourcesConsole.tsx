@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { SourceDocument, SINGAPORE_SCHOOLS } from '@paperforge/shared';
 
-interface SourcesConsoleProps {
+export interface SourcesConsoleProps {
   sources: SourceDocument[];
 }
 

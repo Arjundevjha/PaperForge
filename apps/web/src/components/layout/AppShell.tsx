@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { SubjectId, SUBJECT_METADATA } from '@paperforge/shared';
 
-interface AppShellProps {
+export interface AppShellProps {
   children: React.ReactNode;
   activeSubject: SubjectId;
   onSubjectChange: (subject: SubjectId) => void;

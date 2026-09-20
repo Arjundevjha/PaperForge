@@ -25,7 +25,7 @@ import {
   Answer,
 } from '@paperforge/shared';
 
-interface TeacherResourceHubProps {
+export interface TeacherResourceHubProps {
   activeSubject: SubjectId;
   worksheets: Worksheet[];
   questions: Question[];

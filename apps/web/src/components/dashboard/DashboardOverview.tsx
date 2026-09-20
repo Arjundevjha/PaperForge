@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { SourceDocument, ReviewItem, Worksheet, Question } from '@paperforge/shared';
 
-interface DashboardOverviewProps {
+export interface DashboardOverviewProps {
   sources: SourceDocument[];
   questions: Question[];
   worksheets: Worksheet[];

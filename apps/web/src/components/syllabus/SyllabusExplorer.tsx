@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { BookOpen, ChevronDown, ChevronRight, Hash, Tag, Layers } from 'lucide-react';
 import { SubjectId, SINGAPORE_A_LEVEL_SYLLABI, SUBJECT_METADATA } from '@paperforge/shared';
 
-interface SyllabusExplorerProps {
+export interface SyllabusExplorerProps {
   activeSubject: SubjectId;
 }
 

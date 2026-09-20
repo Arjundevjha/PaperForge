@@ -39,3 +39,4 @@ lerna-debug.log*
 scratch/
 tmp/
 *.tsbuildinfo
+.fallow/

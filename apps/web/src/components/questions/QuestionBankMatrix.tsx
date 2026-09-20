@@ -21,7 +21,7 @@ import {
   SUBJECT_METADATA,
 } from '@paperforge/shared';
 
-interface QuestionBankMatrixProps {
+export interface QuestionBankMatrixProps {
   questions: Question[];
   answers: Answer[];
   activeSubject: SubjectId;

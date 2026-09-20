@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { ReviewItem } from '@paperforge/shared';
 
-interface ReviewQueueProps {
+export interface ReviewQueueProps {
   initialItems: ReviewItem[];
 }
 
