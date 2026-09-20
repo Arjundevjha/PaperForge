@@ -1,4 +1,4 @@
-import { UserProfile, UserRole, DEFAULT_ADMIN_PROFILE } from '@paperforge/shared';
+import { UserProfile, UserRole, DEFAULT_ADMIN_PROFILE, ALLOWED_ADMIN_EMAIL } from '@paperforge/shared';
 import { createServerSupabaseClient } from './supabase/server';
 
 export async function getCurrentUser(): Promise<UserProfile> {
@@ -16,9 +16,9 @@ export async function getCurrentUser(): Promise<UserProfile> {
       return DEFAULT_ADMIN_PROFILE;
     }
 
-    const role: UserRole =
-      (user.user_metadata?.role as UserRole) ||
-      (user.email === process.env.ADMIN_DEFAULT_EMAIL ? 'ADMIN' : 'TEACHER');
+    // Strict email check: only ALLOWED_ADMIN_EMAIL is authorized
+    const isAllowedAdmin = user.email?.toLowerCase() === ALLOWED_ADMIN_EMAIL.toLowerCase();
+    const role: UserRole = isAllowedAdmin ? 'ADMIN' : 'TEACHER';
 
     return {
       id: user.id,

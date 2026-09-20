@@ -149,20 +149,16 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
-  assigned_role TEXT;
   user_full_name TEXT;
 BEGIN
-  -- Extract role from metadata or default based on email or setting
-  assigned_role := COALESCE(new.raw_user_meta_data->>'role', 'TEACHER');
-  
-  -- If designated admin email (Arjun Dev Jha)
-  IF new.email = 'arjun.dev.jha@paperforge.sg' OR new.email ILIKE '%arjun%' THEN
-    assigned_role := 'ADMIN';
+  -- Strict Allowlist: ONLY arjundevjha111@gmail.com is authorized to register or access PaperForge
+  IF LOWER(new.email) != 'arjundevjha111@gmail.com' THEN
+    RAISE EXCEPTION 'Access Denied: Only arjundevjha111@gmail.com is authorized to register or access PaperForge.';
   END IF;
 
   user_full_name := COALESCE(
     new.raw_user_meta_data->>'full_name',
-    split_part(new.email, '@', 1)
+    'Arjun Dev Jha'
   );
 
   INSERT INTO public.users (id, email, name, role, avatar_url, created_at, updated_at)
@@ -170,7 +166,7 @@ BEGIN
     new.id::TEXT,
     new.email,
     user_full_name,
-    assigned_role,
+    'ADMIN',
     new.raw_user_meta_data->>'avatar_url',
     NOW(),
     NOW()
@@ -178,7 +174,7 @@ BEGIN
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = EXCLUDED.name,
-    role = EXCLUDED.role,
+    role = 'ADMIN',
     avatar_url = EXCLUDED.avatar_url,
     updated_at = NOW();
 

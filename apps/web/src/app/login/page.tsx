@@ -4,11 +4,12 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Mail, AlertCircle, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { ALLOWED_ADMIN_EMAIL } from '@paperforge/shared';
 import { createClient } from '../../lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(ALLOWED_ADMIN_EMAIL);
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [role, setRole] = useState<'ADMIN' | 'TEACHER'>('ADMIN');
@@ -22,6 +23,13 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg('');
     setInfoMsg('');
+
+    // Strict email allowlist: ONLY arjundevjha111@gmail.com is authorized
+    if (email.trim().toLowerCase() !== ALLOWED_ADMIN_EMAIL.toLowerCase()) {
+      setErrorMsg(`Access Denied: Only ${ALLOWED_ADMIN_EMAIL} is authorized to access PaperForge.`);
+      return;
+    }
+
     setLoading(true);
 
     if (!supabase) {
@@ -139,7 +147,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="arjun.dev.jha@paperforge.sg"
+                placeholder="arjundevjha111@gmail.com"
                 className="w-full bg-surface-2 border border-border-subdued focus:border-primary-cyan rounded-lg pl-9 pr-3 py-2.5 text-xs text-[#f1f5f9] focus:outline-none transition-colors"
               />
             </div>

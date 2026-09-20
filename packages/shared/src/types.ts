@@ -265,9 +265,11 @@ export interface UserProfile {
   avatarUrl?: string;
 }
 
+export const ALLOWED_ADMIN_EMAIL = 'arjundevjha111@gmail.com';
+
 export const DEFAULT_ADMIN_PROFILE: UserProfile = {
   id: 'usr_admin_01',
-  email: 'arjun.dev.jha@paperforge.sg',
+  email: ALLOWED_ADMIN_EMAIL,
   name: 'Arjun Dev Jha',
   role: 'ADMIN',
 };

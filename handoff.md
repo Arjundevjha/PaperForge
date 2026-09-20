@@ -15,7 +15,7 @@
   - **Supabase Auth & RBAC Architecture**:
     - Integrated `@supabase/supabase-js` (`^2.116.0`) and `@supabase/ssr` (`^0.12.7`) with dual-engine architecture:
       - **Live Supabase Mode**: Connects to Supabase GoTrue Auth and PostgreSQL via Drizzle ORM when `.env.local` is provided.
-      - **Local Development Mode**: Seamless zero-friction fallback with default Admin context (`Arjun Dev Jha`, `arjun.dev.jha@paperforge.sg`) and Teacher context (`Ms. Clara Tan`, `clara.tan@paperforge.sg`), allowing offline development and test execution without external services.
+      - **Local Development Mode**: Seamless zero-friction fallback with default Admin context (`Arjun Dev Jha`, `arjundevjha111@gmail.com`) and Teacher context (`Ms. Clara Tan`, `clara.tan@paperforge.sg`), allowing offline development and test execution without external services.
     - Built dedicated branded `/login` screen (`apps/web/src/app/login/page.tsx`) with login/register toggle and role selection (`ADMIN` vs `TEACHER`).
     - Added user profile dropdown in `AppShell` header displaying user email, active role badge (`ADMIN` in emerald green, `TEACHER` in cyan), dev persona switcher, and sign-out controls.
     - Added Supabase SQL migration (`packages/db/supabase/migrations/20260920000000_supabase_auth_and_schema.sql`) with automatic `auth.users` trigger synchronizing users to `public.users` with assigned roles, plus Row-Level Security (RLS) policies.
@@ -57,7 +57,7 @@
   - Full access to all screens and API endpoints.
   - Can resolve and manage items in the **Human-in-the-Loop Review Queue** (`/review`, `/api/review`).
   - Can ingest, re-index, and sync examination sources across the 16 Junior Colleges (`/sources`, `/api/sources`).
-  - Default dev persona: `Arjun Dev Jha` (`arjun.dev.jha@paperforge.sg`).
+  - Default dev persona: `Arjun Dev Jha` (`arjundevjha111@gmail.com`).
 - **Teacher Account (`TEACHER`)**:
   - Access to the **Teacher Resource Hub** (`/`), Cambridge A4 live worksheet preview, PDF generation, Question Bank matrix (`/questions`), and Syllabus taxonomy (`/syllabus`).
   - Read-only access to published materials and worksheets.
@@ -68,7 +68,7 @@ To connect to your live Supabase project, create `apps/web/.env.local` with your
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project-id>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
-ADMIN_DEFAULT_EMAIL=arjun.dev.jha@paperforge.sg
+ADMIN_DEFAULT_EMAIL=arjundevjha111@gmail.com
 DATABASE_URL=postgresql://postgres:<password>@db.<your-project-id>.supabase.co:5432/postgres
 ```
 Apply the database schema and auth hook by running the migration in Supabase SQL Editor:
