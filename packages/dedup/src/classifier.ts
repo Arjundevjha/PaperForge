@@ -4,8 +4,8 @@
  */
 
 import { DedupOutcome, DedupComparisonResult } from '@paperforge/shared';
-import { hashNormalizedText } from './hash.js';
-import { tokenSimilarity, compareNumericalValues } from './similarity.js';
+import { hashNormalizedText } from './hash';
+import { tokenSimilarity, compareNumericalValues } from './similarity';
 
 export interface QuestionForDedup {
   id: string;

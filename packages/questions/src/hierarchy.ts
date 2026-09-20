@@ -3,7 +3,7 @@
  * Maintains parent-child relationships across nested examination problems
  */
 
-import { ParsedQuestionMarker, parseQuestionMarker } from './parser.js';
+import { ParsedQuestionMarker, parseQuestionMarker } from './parser';
 
 export interface QuestionNode {
   id: string;

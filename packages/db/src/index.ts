@@ -1,3 +1,3 @@
-export * from './schema.js';
-export * from './seed.js';
-export * from './store.js';
+export * from './schema';
+export * from './seed';
+export * from './store';

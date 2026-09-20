@@ -1,3 +1,3 @@
-export * from './hash.js';
-export * from './similarity.js';
-export * from './classifier.js';
+export * from './hash';
+export * from './similarity';
+export * from './classifier';

@@ -3,7 +3,7 @@
  * Word n-gram and token similarity for Cambridge examination questions
  */
 
-import { normalizeText } from './hash.js';
+import { normalizeText } from './hash';
 
 export function tokenSimilarity(a: string, b: string): number {
   const normA = normalizeText(a);

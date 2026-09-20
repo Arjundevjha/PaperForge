@@ -1,0 +1,35 @@
+{
+  "name": "@paperforge/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@paperforge/classification": "*",
+    "@paperforge/db": "*",
+    "@paperforge/dedup": "*",
+    "@paperforge/pdf": "*",
+    "@paperforge/questions": "*",
+    "@paperforge/shared": "*",
+    "@paperforge/worksheets": "*",
+    "lucide-react": "^1.47.0",
+    "next": "^16.3.5",
+    "pdf-lib": "^1.17.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.2"
+  }
+}

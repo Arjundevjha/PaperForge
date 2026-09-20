@@ -13,7 +13,7 @@ import {
   SubjectId,
   SingaporeSchoolCode,
 } from '@paperforge/shared';
-import { generateSeedData, SeedDatabaseData } from './seed.js';
+import { generateSeedData, SeedDatabaseData } from './seed';
 
 export class PaperForgeDataStore {
   private sources: Map<string, SourceDocument> = new Map();

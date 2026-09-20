@@ -1,2 +1,2 @@
-export * from './parser.js';
-export * from './hierarchy.js';
+export * from './parser';
+export * from './hierarchy';

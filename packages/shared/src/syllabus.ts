@@ -3,7 +3,7 @@
  * Authoritative syllabus specifications for Singapore Junior Colleges
  */
 
-import { SubjectId } from './types.js';
+import { SubjectId } from './types';
 
 export interface SyllabusSubtopic {
   id: string;

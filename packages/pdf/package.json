@@ -6,6 +6,6 @@
   "types": "src/index.ts",
   "dependencies": {
     "@paperforge/shared": "*",
-    "pdf-lib": "^1.17.9"
+    "pdf-lib": "^1.17.1"
   }
 }

@@ -3,7 +3,7 @@
  * Preserves exact academic citation coordinates for all examination questions
  */
 
-import { QuestionProvenance, SingaporeSchoolCode, SINGAPORE_SCHOOLS } from './types.js';
+import { QuestionProvenance, SingaporeSchoolCode, SINGAPORE_SCHOOLS } from './types';
 
 export function formatProvenance(
   school: SingaporeSchoolCode,
