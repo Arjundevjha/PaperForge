@@ -139,7 +139,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="adrian.low@paperforge.sg"
+                placeholder="arjun.dev.jha@paperforge.sg"
                 className="w-full bg-surface-2 border border-border-subdued focus:border-primary-cyan rounded-lg pl-9 pr-3 py-2.5 text-xs text-[#f1f5f9] focus:outline-none transition-colors"
               />
             </div>

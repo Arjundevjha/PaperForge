@@ -267,8 +267,8 @@ export interface UserProfile {
 
 export const DEFAULT_ADMIN_PROFILE: UserProfile = {
   id: 'usr_admin_01',
-  email: 'adrian.low@paperforge.sg',
-  name: 'Dr. Adrian Low',
+  email: 'arjun.dev.jha@paperforge.sg',
+  name: 'Arjun Dev Jha',
   role: 'ADMIN',
 };
 

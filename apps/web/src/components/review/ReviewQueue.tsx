@@ -32,7 +32,7 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({ initialItems }) => {
           ? {
               ...item,
               status: decision === 'REJECT' ? 'DISMISSED' : 'RESOLVED',
-              reviewedBy: 'Dr. Adrian Low',
+              reviewedBy: 'Arjun Dev Jha',
               reviewedAt: new Date().toISOString(),
               details: { ...item.details, decision, resolutionNotes },
             }
