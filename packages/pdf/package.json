@@ -1,0 +1,11 @@
+{
+  "name": "@paperforge/pdf",
+  "version": "1.0.0",
+  "description": "Cambridge A4 examination paper and answer key PDF compiler",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@paperforge/shared": "*",
+    "pdf-lib": "^1.17.9"
+  }
+}
