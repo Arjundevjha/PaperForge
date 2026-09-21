@@ -71,6 +71,13 @@ export class PaperForgeDataStore {
     return this.sources.get(id);
   }
 
+  getSourceByHash(hash: string): SourceDocument | undefined {
+    for (const s of this.sources.values()) {
+      if (s.sourceHash === hash) return s;
+    }
+    return undefined;
+  }
+
   addSource(source: SourceDocument): SourceDocument {
     this.sources.set(source.id, source);
     return source;
@@ -181,6 +188,11 @@ export class PaperForgeDataStore {
       list = list.filter((r) => r.status === status);
     }
     return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  addReviewItem(item: ReviewItem): ReviewItem {
+    this.reviewItems.set(item.id, item);
+    return item;
   }
 
   resolveReviewItem(

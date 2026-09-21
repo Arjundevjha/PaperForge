@@ -5,6 +5,8 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
+    "@paperforge/classification": "*",
+    "@paperforge/dedup": "*",
     "@paperforge/shared": "*",
     "drizzle-orm": "^0.45.2"
   }

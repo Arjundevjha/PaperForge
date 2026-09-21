@@ -16,7 +16,8 @@
     "test:fallow": "fallow dead-code --fail-on-issues",
     "fallow": "fallow dead-code",
     "fallow:fix": "fallow fix --yes",
-    "scan:security": "echo 'Running Snyk security scan...'"
+    "scan:security": "echo 'Running Snyk security scan...'",
+    "ingest": "tsx scripts/ingest_paper.ts"
   },
   "keywords": [
     "a-level",

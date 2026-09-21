@@ -25,3 +25,13 @@ export function hashNormalizedText(raw: string): string {
   const norm = normalizeText(raw);
   return createHash('sha256').update(norm).digest('hex');
 }
+
+export function computeVisualHash(diagramData: Buffer | Uint8Array | string | null | undefined): string | null {
+  if (!diagramData) return null;
+  if (typeof diagramData === 'string') {
+    if (!diagramData.trim()) return null;
+    return createHash('sha256').update(diagramData.trim()).digest('hex');
+  }
+  if (diagramData.length === 0) return null;
+  return createHash('sha256').update(diagramData).digest('hex');
+}
