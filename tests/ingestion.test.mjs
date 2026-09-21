@@ -8,17 +8,34 @@ import {
 } from '../packages/db/src/real-papers.ts';
 
 test('Production Exam Ingestion — Package Structure & Integrity', () => {
+  const seabChapters = new Set([
+    'Functions and Graphs',
+    'Sequences and Series',
+    'Vectors',
+    'Complex Numbers',
+    'Calculus',
+    'Probability and Statistics',
+  ]);
+
   assert.equal(REAL_PAPER_3_PACKAGE.questions.length, 13);
   assert.equal(REAL_PAPER_3_PACKAGE.answers.length, 13);
   assert.equal(REAL_PAPER_3_PACKAGE.source.school, 'JPJC');
   assert.equal(REAL_PAPER_3_PACKAGE.source.year, 2022);
   assert.ok(REAL_PAPER_3_PACKAGE.source.sourceHash.length === 64);
+  for (const q of REAL_PAPER_3_PACKAGE.questions) {
+    assert.ok(seabChapters.has(q.chapter), `Chapter "${q.chapter}" must be an official SEAB 9758 chapter`);
+    assert.equal(q.syllabusVersionId, 'SEAB-9758-Official');
+  }
 
   assert.equal(REAL_PAPER_4_PACKAGE.questions.length, 13);
   assert.equal(REAL_PAPER_4_PACKAGE.answers.length, 13);
   assert.equal(REAL_PAPER_4_PACKAGE.source.school, 'EJC');
   assert.equal(REAL_PAPER_4_PACKAGE.source.year, 2022);
   assert.ok(REAL_PAPER_4_PACKAGE.source.sourceHash.length === 64);
+  for (const q of REAL_PAPER_4_PACKAGE.questions) {
+    assert.ok(seabChapters.has(q.chapter), `Chapter "${q.chapter}" must be an official SEAB 9758 chapter`);
+    assert.equal(q.syllabusVersionId, 'SEAB-9758-Official');
+  }
 });
 
 test('Production Exam Ingestion — Clean Slate, Ingestion & 1:1 Invariant', () => {

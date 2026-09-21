@@ -217,7 +217,7 @@ export async function POST(request: Request) {
           subject: detectedSubject,
           chapter: classification.chapter,
           subtopic: classification.subtopic,
-          syllabusVersionId: 'v2026.2',
+          syllabusVersionId: classification.syllabusVersion,
           textContent: rq.text,
           marks: rq.marks || 4,
           textHash,

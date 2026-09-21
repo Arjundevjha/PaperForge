@@ -62,11 +62,14 @@ export async function POST(request: Request) {
       title: title || `${wsNumber}: ${chapter} (Singapore A-Level)`,
       subject: parsedSubject.data,
       chapter,
-      syllabusVersionId: 'v2026.2',
-      manifest,
-      targetMarks: manifest.totalMarks,
+      syllabusVersionId: 'SEAB-9758-Official',
+      version: 1,
+      questionCount: selectedQuestions.length,
+      totalMarks: manifest.totalMarks,
       status: 'PUBLISHED',
-      createdAt: new Date().toISOString(),
+      sourceCoverage: Array.from(new Set(selectedQuestions.map((q) => q.provenance.school))),
+      manifest,
+      generatedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
