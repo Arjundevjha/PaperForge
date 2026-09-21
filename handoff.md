@@ -28,11 +28,11 @@
       - Supports 1-click simulation payloads (`simulate: "paper_3"` or `"paper_4"`) and direct payload ingestion.
       - Supports `DELETE /api/sources` for instantaneous clean-slate reset back to 0 papers.
       - Returns rich structured telemetry (`sourceHash`, `totalMarks`, `processingTimeMs`, `questionsIngested`, `answersIngested`).
-    - **Interactive Frontend Ingestion Console (`SourcesConsole.tsx`)**:
-      - Modern "Upload Source Paper" modal adhering to Technical Examination Foundry design tokens.
-      - 1-Click Simulation Cards for **JPJC 2022 Promo Paper 3** and **EJC/DHS 2022 Promo Paper 4**.
-      - Live step-by-step pipeline progress animations and telemetry counters.
-      - "Reset State" clean slate button and reactive table updates without page refreshes.
+    - **Direct PDF File Upload with Drag-and-Drop (`SourcesConsole.tsx`)**:
+      - Replaced the simulation-only restriction with a **full file upload form & drag-and-drop dropzone** in the modal.
+      - Users can directly upload any examination Question Paper (`.pdf`), select Junior College (16 Singapore JCs), Examination Year, Subject, and Paper Number.
+      - Backed by dynamic PyMuPDF extraction (`scripts/extract_pdf_worker.py`) that slices questions, extracts marks, detects vector diagrams, classifies topics against the Singapore curriculum, and persists to the database.
+      - Re-uploading the same file immediately checks SHA-256 idempotency and returns HTTP 409 Conflict with hash collision warning.
     - **Headless CLI Ingestion Tool (`scripts/ingest_paper.ts` / `npm run ingest`)**:
       - Enables automated terminal-driven batch ingestion for background cron and worker pipelines.
   - **Quality Gates & Comprehensive Verification**:
