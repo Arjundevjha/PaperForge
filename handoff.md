@@ -1,6 +1,6 @@
 # PaperForge — Session Handoff Document
 
-> **Status**: Mathematical Question Extraction, Strict SEAB Chapter Scoping & Cambridge A4 Rendering Complete  
+> **Status**: Monorepo Cleaned, Production .gitignore Applied, Full Fallow Scan & npm Audit Complete  
 > **Active Model**: Gemini 3  
 > **Workspace**: `/Users/abc/Desktop/PaperForge`  
 > **Git Branch**: `main` (Local Only • Zero Remote Branches/Pushes)
@@ -11,34 +11,28 @@
 
 - **Project Vision**: PaperForge is an automated Singapore GCE A-Level question-bank and worksheet-generation platform for tuition teachers and educational institutions, ingesting official examination papers across 16 Singapore Junior Colleges, extracting questions and marking schemes, classifying against official Singapore-Cambridge syllabi, and generating verified student worksheets and matching answer keys in authentic Cambridge A4 formatting.
 - **Key Issues Addressed in this Milestone**:
-  1. **Corrupted Mathematical Text Dump Resolved**:
-     - *Issue*: Question stems extracted from Word/MathType PDFs had split characters and line-broken formulas (`1 2 y x = -`, broken glyphs like `  `, and bleeding question headers).
-     - *Fix*:
-       - Integrated line-by-line bounding box clipping in `scripts/extract_pdf_worker.py` with immediate termination on encountering the next question marker.
-       - Replaced corrupted unicode glyphs with clean mathematical symbols.
-       - Connected `POST /api/sources` to canonical high-fidelity packages (`REAL_PAPER_3_PACKAGE` for JPJC 2022 P1 and `REAL_PAPER_4_PACKAGE` for EJC 2022 P2). All 26 ingested questions now feature authentic Cambridge mathematical formatting (e.g. $y = \frac{1}{x-2}$, $\int_0^2 \frac{t^5}{\sqrt{1+t^3}} dt$, $\frac{dy}{dx}$ implicit derivatives).
-  2. **Worksheet Chapter Scoping & Calculus Isolation**:
-     - *Issue*: A differentiation techniques question appeared under `Functions and Graphs` because the worksheet generator was slicing `allQuestions` without filtering by chapter.
-     - *Fix*: Enforced strict chapter filtering in `apps/web/src/app/api/worksheets/route.ts`. When a chapter is selected, `candidateQuestions` strictly matches `q.chapter.toLowerCase() === chapter.toLowerCase()`.
-     - Generated 5 dedicated official chapter worksheets:
-       - `WS-MATH-01`: **Functions and Graphs Revision (JPJC & EJC)** (10 questions • 69 marks — 100% Functions & Graphs)
-       - `WS-MATH-02`: **Calculus Revision: Differentiation & Integration (JPJC & EJC)** (10 questions • 83 marks — 100% Calculus)
-       - `WS-MATH-03`: **Sequences and Series: AP/GP (JPJC & EJC)** (2 questions • 16 marks — 100% Sequences & Series)
-       - `WS-MATH-04`: **Vectors: Lines & Planes in 3D (JPJC & EJC)** (4 questions • 38 marks — 100% Vectors)
-       - `WS-MATH-05`: **Promotional Examination Practice Paper (All Topics)** (10 questions • 74 marks — Cross-topic mock)
-  3. **Teacher Hub Canvas UI & Duplicate Numbering Cleanup**:
-     - Added `cleanQuestionStem(text, qnum)` to strip redundant duplicate question numbering in the Cambridge A4 canvas (`1. (i) ...` instead of `1. 1 (i) ...`).
+  1. **Project Files Purge (1,387 lines removed)**:
+     - Removed redundant root `supabase_setup.sql` (canonical migration is maintained in `packages/db/supabase/migrations/20260920000000_supabase_auth_and_schema.sql`).
+     - Removed obsolete extraction script `scripts/extract_real_papers.py` and unreferenced JSON dumps (`packages/db/src/real-papers/jpjc_2022_paper_3.json`, `packages/db/src/real-papers/ejc_2022_paper_4.json`).
+     - Removed temporary Next.js dev server files `apps/web/AGENTS.md` and `apps/web/CLAUDE.md` from git tracking.
+  2. **Production-Grade `.gitignore` Overhaul**:
+     - Configured monorepo cache and build ignores (`**/.next/`, `**/.turbo/`, `**/dist/`, `**/build/`, `**/*.tsbuildinfo`).
+     - Ignored raw uploaded and temporary PDF files (`*.pdf`, `**/*.pdf`).
+     - Ignored embedded persistence stores (`**/.paperforge-store.json`).
+     - Ignored auto-generated Next.js dev server rules (`**/AGENTS.md`, `**/CLAUDE.md`).
+     - Preserved tracked configuration templates (`!.env.example`).
+  3. **Full Fallow & npm Audit Verification**:
+     - **Fallow Dead-Code Scan**: **0 issues found** across 37 entry points (`0.03s`).
+     - **Fallow Duplication Scan**: **0 code clones detected** (`0.02s`).
+     - **npm audit**: **0 vulnerabilities** across all packages and dependencies.
+  4. **Strict Chapter Scoping & Cambridge Typography**:
+     - Enforced strict chapter filtering in worksheet engine: Differentiation & Integration questions belong strictly under **Calculus**, never under Functions & Graphs.
+     - Added `cleanQuestionStem(text, qnum)` removing redundant question numbers on Cambridge canvas (`1. (i) ...` instead of `1. 1 (i) ...`).
      - Added syllabus topic badges to every question on the canvas: `[Calculus • Differentiation Techniques]`, `[Functions and Graphs • Graphs and Transformations]`.
-     - Updated `activeWorksheet` calculation to strictly bind to `filteredWorksheets` so switching chapter tabs immediately switches the canvas to that chapter's worksheet.
-     - Added an in-situ "Compile Official Worksheet" button when no worksheets exist for a selected chapter.
-  4. **Multi-Process Store Synchronization**:
-     - Added `reloadFromDisk()` to `PaperForgeDataStore` in `packages/db/src/store.ts` that clears in-memory maps and re-reads `.paperforge-store.json`.
-     - Wired `reloadFromDisk()` into `GET /api/worksheets`, `GET /api/questions`, and `GET /api/sources`, ensuring background task edits or external scripts are immediately visible in the web app without server restarts.
-  5. **Automated Tests & Quality Assurance**:
-     - **Automated Test Suite**: **31/31 passing unit, e2e, and ingestion tests** (`0.22s`).
-     - **Fallow Dead-Code Analysis**: **0 issues across 37 entry points** (`0.04s`).
-     - **Turbopack Production Build**: All 14 routes compiled with zero errors (`0.36s`).
-     - **Live Browser Verification (`agent-browser`)**: Verified Teacher Hub (Functions & Graphs, Calculus, Mark Scheme toggle), Question Bank, Sources, Dashboard, and Review Queue.
+  5. **Automated Tests & Quality Gates**:
+     - **Automated Test Suite**: **31/31 passing unit, e2e, and ingestion tests** (`0.25s`).
+     - **Next.js Turbopack Build**: All 14 routes compiled with zero errors (`0.76s`).
+     - **Git Hygiene**: Working tree 100% clean on `main` (commit `cd21117`). Strictly local, zero remote branches or pushes.
 
 ---
 
@@ -56,7 +50,7 @@
 | **Web Application** | `apps/web/` | Built & Verified | Next.js App Router with Technical Examination Foundry design system, dynamic review badge, live REST API fetching, Cambridge A4 preview canvas |
 | **Extraction Worker** | `scripts/extract_pdf_worker.py` | Clean & Tested | PyMuPDF worker with line-by-line bounding box clipping, symbol cleanup, question boundary guard |
 | **Pipeline E2E Test** | `tests/pipeline.e2e.test.mjs` | Passing (1/1) | Full pipeline integration test with isolated `PaperForgeDataStore` |
-| **Fallow Gate** | `.fallowrc.json` | 0 Issues (0.04s) | Automated dead-code, unused export, and unreferenced dependency scanner |
+| **Fallow Gate** | `.fallowrc.json` | 0 Issues (0.03s) | Automated dead-code, unused export, and unreferenced dependency scanner |
 
 ---
 
