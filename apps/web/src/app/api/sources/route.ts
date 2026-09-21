@@ -112,19 +112,25 @@ export async function POST(request: Request) {
 
       // Compute Cryptographic SHA-256 Source Hash
       const sourceHash = createHash('sha256').update(fileBuffer).digest('hex');
+      const overwrite = formData.get('overwrite') === 'true' || formData.get('force') === 'true';
 
       // Idempotency: Check if source has already been ingested
       const existingSource = store.getSourceByHash(sourceHash);
       if (existingSource) {
-        return NextResponse.json(
-          {
-            success: false,
-            duplicate: true,
-            message: `Source paper already ingested: ${existingSource.filename} (${existingSource.school} ${existingSource.year}). SHA-256 hash collision detected.`,
-            source: existingSource,
-          },
-          { status: 409 }
-        );
+        if (overwrite) {
+          store.deleteSource(existingSource.id);
+        } else {
+          return NextResponse.json(
+            {
+              success: false,
+              duplicate: true,
+              canOverwrite: true,
+              message: `Source paper already ingested: ${existingSource.filename} (${existingSource.school} ${existingSource.year}). SHA-256 hash collision detected.`,
+              source: existingSource,
+            },
+            { status: 409 }
+          );
+        }
       }
 
       const startTime = Date.now();
@@ -286,8 +292,19 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   const store = getGlobalStore();
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  if (id) {
+    const deleted = store.deleteSource(id);
+    return NextResponse.json({
+      success: deleted,
+      message: deleted ? `Source ${id} deleted.` : `Source ${id} not found.`,
+    });
+  }
+
   store.clearAllData();
   return NextResponse.json({
     success: true,

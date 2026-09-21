@@ -83,6 +83,19 @@ export class PaperForgeDataStore {
     return source;
   }
 
+  deleteSource(id: string): boolean {
+    const source = this.sources.get(id);
+    if (!source) return false;
+    this.sources.delete(id);
+    for (const [qid, q] of Array.from(this.questions.entries())) {
+      if (q.sourceId === id) {
+        this.questions.delete(qid);
+        this.answers.delete(qid);
+      }
+    }
+    return true;
+  }
+
   updateSourceStatus(id: string, status: SourceDocument['status'], error?: string): SourceDocument | undefined {
     const s = this.sources.get(id);
     if (!s) return undefined;

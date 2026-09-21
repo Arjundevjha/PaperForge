@@ -80,10 +80,27 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
     }
   };
 
+  const handleDeleteSource = async (id: string, filename: string) => {
+    if (!window.confirm(`Delete ${filename} and all its extracted questions?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/sources?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setIngestionMessage(`Source ${filename} deleted.`);
+        await fetchSources();
+      }
+    } catch {
+      setIngestionError('Failed to delete source document.');
+    }
+  };
+
   const handleQpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setSelectedQpFile(file);
+      setIngestionError(null);
     }
   };
 
@@ -91,6 +108,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setSelectedSolFile(file);
+      setIngestionError(null);
     }
   };
 
@@ -101,6 +119,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
       const file = e.dataTransfer.files[0];
       if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
         setSelectedQpFile(file);
+        setIngestionError(null);
       } else {
         setIngestionError('Question Paper must be a valid PDF file.');
       }
@@ -114,14 +133,15 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
       const file = e.dataTransfer.files[0];
       if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
         setSelectedSolFile(file);
+        setIngestionError(null);
       } else {
         setIngestionError('Answer Key must be a valid PDF file.');
       }
     }
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpload = async (e?: React.FormEvent, forceOverwrite = false) => {
+    if (e) e.preventDefault();
     if (!selectedQpFile) {
       setIngestionError('Please select a Question Paper PDF to upload.');
       return;
@@ -165,6 +185,9 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
       if (customTitle.trim()) {
         formData.append('title', customTitle.trim());
       }
+      if (forceOverwrite) {
+        formData.append('overwrite', 'true');
+      }
 
       const res = await fetch('/api/sources', {
         method: 'POST',
@@ -187,6 +210,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
       setSelectedQpFile(null);
       setSelectedSolFile(null);
       setCustomTitle('');
+      setIsModalOpen(false);
       await fetchSources();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Network error during upload.';
@@ -222,7 +246,10 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
           )}
 
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setIngestionError(null);
+              setIsModalOpen(true);
+            }}
             className="flex items-center gap-1.5 px-4 py-2 rounded bg-primary-cyan hover:bg-primary-cyan/90 text-surface-0 font-semibold text-xs transition-all shadow-lg shadow-primary-cyan/20"
           >
             <Upload size={14} />
@@ -243,7 +270,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
         </div>
       )}
 
-      {ingestionError && (
+      {ingestionError && !isModalOpen && (
         <div className="p-3 rounded bg-status-rejected/15 border border-status-rejected/30 text-xs text-status-rejected flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle size={15} />
@@ -278,7 +305,10 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                     Clean production state: 0 source documents. Click &quot;Upload Examination Papers&quot; above to select your Question Paper and matching Answer Key PDFs.
                   </p>
                   <button
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={() => {
+                      setIngestionError(null);
+                      setIsModalOpen(true);
+                    }}
                     className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-surface-2 hover:bg-surface-3 border border-border-active hover:border-primary-cyan text-xs text-primary-cyan font-medium transition-all"
                   >
                     <Upload size={13} />
@@ -313,14 +343,23 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleReprocess(s.id)}
-                        disabled={isReprocessing}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded bg-surface-2 hover:bg-surface-3 border border-border-subdued text-[11px] text-[#cbd5e1] transition-all"
-                      >
-                        <RefreshCw size={11} className={isReprocessing ? 'animate-spin' : ''} />
-                        <span>Reprocess</span>
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleReprocess(s.id)}
+                          disabled={isReprocessing}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-surface-2 hover:bg-surface-3 border border-border-subdued text-[11px] text-[#cbd5e1] transition-all"
+                        >
+                          <RefreshCw size={11} className={isReprocessing ? 'animate-spin' : ''} />
+                          <span>Reprocess</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSource(s.id, s.filename)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-surface-2 hover:bg-red-500/20 border border-border-subdued hover:border-red-500/40 text-[11px] text-[#94a3b8] hover:text-red-400 transition-all"
+                          title="Delete source paper"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -348,7 +387,10 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
               </div>
               <button
                 onClick={() => {
-                  if (!isIngesting) setIsModalOpen(false);
+                  if (!isIngesting) {
+                    setIngestionError(null);
+                    setIsModalOpen(false);
+                  }
                 }}
                 className="p-1 rounded hover:bg-surface-2 text-[#94a3b8] hover:text-[#f1f5f9]"
               >
@@ -357,7 +399,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
             </div>
 
             {/* Direct Dual Dropzones Form */}
-            <form onSubmit={handleUpload} className="space-y-4">
+            <form onSubmit={(e) => handleUpload(e, false)} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Dropzone 1: Question Paper */}
                 <div>
@@ -478,6 +520,46 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                 />
               </div>
 
+              {/* In-Modal Error & Duplicate Handling */}
+              {ingestionError && (
+                <div className="p-3.5 rounded-lg bg-status-rejected/15 border border-status-rejected/30 text-xs text-status-rejected space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle size={16} className="shrink-0 mt-0.5 text-status-rejected" />
+                      <span className="font-medium leading-relaxed">{ingestionError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIngestionError(null)}
+                      className="text-status-rejected/70 hover:text-status-rejected shrink-0"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  {ingestionError.includes('collision') && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-status-rejected/25 font-mono text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => handleUpload(undefined, true)}
+                        className="px-3 py-1.5 rounded bg-primary-cyan hover:bg-primary-cyan/90 text-surface-0 font-semibold transition-all shadow-sm"
+                      >
+                        ⚡ Overwrite & Re-Ingest
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await handleReset();
+                          setIngestionError(null);
+                        }}
+                        className="px-3 py-1.5 rounded bg-surface-2 hover:bg-surface-3 text-[#cbd5e1] border border-border-subdued transition-all"
+                      >
+                        Reset All (0 Papers)
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Ingestion Telemetry & Logs */}
               {isIngesting && (
                 <div className="p-4 rounded-lg bg-surface-0 border border-border-active space-y-2.5">
@@ -517,7 +599,10 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
               <div className="flex items-center justify-end gap-3 pt-2 border-t border-border-subdued">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIngestionError(null);
+                    setIsModalOpen(false);
+                  }}
                   disabled={isIngesting}
                   className="px-4 py-2 rounded bg-surface-2 hover:bg-surface-3 text-xs text-[#cbd5e1] font-medium transition-all"
                 >
