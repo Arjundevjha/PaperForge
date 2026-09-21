@@ -57,6 +57,10 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
     }
   };
 
+  React.useEffect(() => {
+    fetchSources();
+  }, []);
+
   const handleReprocess = (id: string) => {
     setReprocessingId(id);
     setTimeout(() => {
@@ -244,6 +248,15 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
               <span>Reset State</span>
             </button>
           )}
+
+          <button
+            onClick={() => fetchSources()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-surface-2 hover:bg-surface-3 border border-border-subdued text-xs text-[#cbd5e1] hover:text-[#f1f5f9] font-medium transition-all"
+            title="Refresh Ingested Sources"
+          >
+            <RefreshCw size={13} />
+            <span>Refresh</span>
+          </button>
 
           <button
             onClick={() => {

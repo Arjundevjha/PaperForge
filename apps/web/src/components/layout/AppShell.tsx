@@ -39,6 +39,23 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingReviewCount, setPendingReviewCount] = useState<number>(0);
+
+  // Dynamically fetch pending review queue count
+  useEffect(() => {
+    const fetchPendingReviews = async () => {
+      try {
+        const res = await fetch('/api/review?status=PENDING');
+        const data = await res.json();
+        if (data.success && typeof data.count === 'number') {
+          setPendingReviewCount(data.count);
+        }
+      } catch {
+        // ignore network error
+      }
+    };
+    fetchPendingReviews();
+  }, [pathname]);
 
   // Global Keyboard Shortcuts (Ctrl+K / Cmd+K and Escape)
   useEffect(() => {
@@ -59,7 +76,12 @@ export const AppShell: React.FC<AppShellProps> = ({
     { label: 'Teacher Resource Hub', href: '/', icon: FileSpreadsheet },
     { label: 'PaperForge Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Question Bank', href: '/questions', icon: Layers },
-    { label: 'Review Queue', href: '/review', icon: CheckSquare, badge: '2' },
+    {
+      label: 'Review Queue',
+      href: '/review',
+      icon: CheckSquare,
+      badge: pendingReviewCount > 0 ? String(pendingReviewCount) : undefined,
+    },
     { label: 'Sources & Ingestion', href: '/sources', icon: FileArchive },
     { label: 'Syllabus Explorer', href: '/syllabus', icon: BookOpen },
   ];

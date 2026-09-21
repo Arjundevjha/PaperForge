@@ -3,6 +3,8 @@
  * Unified interface supporting both persistent PostgreSQL and embedded fast in-memory execution
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   SourceDocument,
   Question,
@@ -18,6 +20,17 @@ import {
 } from '@paperforge/shared';
 import { generateSeedData, SeedDatabaseData } from './seed';
 
+function resolvePersistenceFilePath(): string {
+  let curr = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(curr, 'packages', 'db'))) {
+      return path.join(curr, 'packages', 'db', '.paperforge-store.json');
+    }
+    curr = path.dirname(curr);
+  }
+  return path.resolve(process.cwd(), '.paperforge-store.json');
+}
+
 export class PaperForgeDataStore {
   private sources: Map<string, SourceDocument> = new Map();
   private questions: Map<string, Question> = new Map();
@@ -25,6 +38,7 @@ export class PaperForgeDataStore {
   private worksheets: Map<string, Worksheet> = new Map();
   private reviewItems: Map<string, ReviewItem> = new Map();
   private users: Map<string, UserProfile> = new Map();
+  private persistenceFile: string | null = null;
 
   constructor(seedData?: SeedDatabaseData | null) {
     // In dev and prod, default to clean/empty state (0 samples) to simulate a fresh production environment.
@@ -45,12 +59,61 @@ export class PaperForgeDataStore {
     this.users.set(DEFAULT_TEACHER_PROFILE.id, DEFAULT_TEACHER_PROFILE);
   }
 
+  enableDiskPersistence(filepath?: string): void {
+    this.persistenceFile = filepath || resolvePersistenceFilePath();
+    this.loadFromDisk();
+  }
+
+  private saveToDisk(): void {
+    if (!this.persistenceFile) return;
+    try {
+      const payload = {
+        sources: Array.from(this.sources.values()),
+        questions: Array.from(this.questions.values()),
+        answers: Array.from(this.answers.values()),
+        worksheets: Array.from(this.worksheets.values()),
+        reviewItems: Array.from(this.reviewItems.values()),
+      };
+      fs.writeFileSync(this.persistenceFile, JSON.stringify(payload, null, 2), 'utf-8');
+    } catch {
+      // Ignore disk write failure in environments without write access
+    }
+  }
+
+  private loadFromDisk(): boolean {
+    if (!this.persistenceFile || !fs.existsSync(this.persistenceFile)) return false;
+    try {
+      const raw = fs.readFileSync(this.persistenceFile, 'utf-8');
+      if (!raw.trim()) return false;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.sources)) {
+        for (const s of data.sources) this.sources.set(s.id, s);
+      }
+      if (Array.isArray(data.questions)) {
+        for (const q of data.questions) this.questions.set(q.id, q);
+      }
+      if (Array.isArray(data.answers)) {
+        for (const a of data.answers) this.answers.set(a.questionId, a);
+      }
+      if (Array.isArray(data.worksheets)) {
+        for (const w of data.worksheets) this.worksheets.set(w.id, w);
+      }
+      if (Array.isArray(data.reviewItems)) {
+        for (const r of data.reviewItems) this.reviewItems.set(r.id, r);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   clearAllData(): void {
     this.sources.clear();
     this.questions.clear();
     this.answers.clear();
     this.worksheets.clear();
     this.reviewItems.clear();
+    this.saveToDisk();
   }
 
   loadSampleSeed(): void {
@@ -80,6 +143,7 @@ export class PaperForgeDataStore {
 
   addSource(source: SourceDocument): SourceDocument {
     this.sources.set(source.id, source);
+    this.saveToDisk();
     return source;
   }
 
@@ -93,6 +157,7 @@ export class PaperForgeDataStore {
         this.answers.delete(qid);
       }
     }
+    this.saveToDisk();
     return true;
   }
 
@@ -102,6 +167,7 @@ export class PaperForgeDataStore {
     s.status = status;
     if (error) s.errorMessage = error;
     s.updatedAt = new Date().toISOString();
+    this.saveToDisk();
     return s;
   }
 
@@ -150,11 +216,13 @@ export class PaperForgeDataStore {
 
   addQuestion(question: Question): Question {
     this.questions.set(question.id, question);
+    this.saveToDisk();
     return question;
   }
 
   addAnswer(answer: Answer): Answer {
     this.answers.set(answer.questionId, answer);
+    this.saveToDisk();
     return answer;
   }
 
@@ -177,6 +245,7 @@ export class PaperForgeDataStore {
 
   addWorksheet(worksheet: Worksheet): Worksheet {
     this.worksheets.set(worksheet.id, worksheet);
+    this.saveToDisk();
     return worksheet;
   }
 
@@ -210,6 +279,7 @@ export class PaperForgeDataStore {
 
   addReviewItem(item: ReviewItem): ReviewItem {
     this.reviewItems.set(item.id, item);
+    this.saveToDisk();
     return item;
   }
 
@@ -226,6 +296,7 @@ export class PaperForgeDataStore {
     item.reviewedBy = reviewerId;
     item.reviewedAt = new Date().toISOString();
     item.details = { ...item.details, decision, notes };
+    this.saveToDisk();
     return item;
   }
 
@@ -267,12 +338,16 @@ export class PaperForgeDataStore {
   }
 }
 
-// Global shared store singleton for server runtime
-let globalStore: PaperForgeDataStore | null = null;
+// Global shared store singleton for server runtime with globalThis caching across HMR
+const globalForStore = globalThis as unknown as { __paperforge_store?: PaperForgeDataStore };
 
 export function getGlobalStore(): PaperForgeDataStore {
-  if (!globalStore) {
-    globalStore = new PaperForgeDataStore();
+  if (!globalForStore.__paperforge_store) {
+    const store = new PaperForgeDataStore();
+    if (process.env.NODE_ENV !== 'test') {
+      store.enableDiskPersistence();
+    }
+    globalForStore.__paperforge_store = store;
   }
-  return globalStore;
+  return globalForStore.__paperforge_store;
 }

@@ -25,9 +25,14 @@ export async function GET(request: Request) {
     search: search ? search.slice(0, 100) : undefined,
   });
 
+  const answers = questions
+    .map((q) => store.getAnswerByQuestionId(q.id))
+    .filter(Boolean);
+
   return NextResponse.json({
     success: true,
     count: questions.length,
     data: questions,
+    answers,
   });
 }

@@ -6,7 +6,7 @@ import { AppShell } from '../../components/layout/AppShell';
 import { SyllabusExplorer } from '../../components/syllabus/SyllabusExplorer';
 
 export default function SyllabusPage() {
-  const [activeSubject, setActiveSubject] = useState<SubjectId>('chemistry');
+  const [activeSubject, setActiveSubject] = useState<SubjectId>('mathematics');
 
   return (
     <AppShell activeSubject={activeSubject} onSubjectChange={setActiveSubject}>
