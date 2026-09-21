@@ -42,3 +42,4 @@ tmp/
 .fallow/
 .paperforge-store.json
 packages/db/.paperforge-store.json
+/*.pdf
