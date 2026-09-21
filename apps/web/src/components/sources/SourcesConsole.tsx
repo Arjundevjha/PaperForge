@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   FileArchive,
   CheckCircle2,
@@ -13,8 +13,9 @@ import {
   AlertCircle,
   Layers,
   ChevronRight,
+  FileCheck,
 } from 'lucide-react';
-import { SourceDocument, SINGAPORE_SCHOOLS } from '@paperforge/shared';
+import { SourceDocument, SINGAPORE_SCHOOLS, SingaporeSchoolCode } from '@paperforge/shared';
 
 export interface SourcesConsoleProps {
   sources: SourceDocument[];
@@ -30,6 +31,16 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isIngesting, setIsIngesting] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'upload' | 'simulate'>('upload');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [school, setSchool] = useState<SingaporeSchoolCode>('JPJC');
+  const [year, setYear] = useState<number>(2022);
+  const [subject, setSubject] = useState<string>('mathematics');
+  const [paperNumber, setPaperNumber] = useState<number>(1);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [ingestionLogs, setIngestionLogs] = useState<IngestionLog[]>([]);
   const [ingestionMessage, setIngestionMessage] = useState<string | null>(null);
   const [ingestionError, setIngestionError] = useState<string | null>(null);
@@ -69,6 +80,101 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      // Auto-detect school from filename if possible
+      const fname = file.name.toLowerCase();
+      if (fname.includes('ejc')) setSchool('EJC');
+      else if (fname.includes('jpjc')) setSchool('JPJC');
+      else if (fname.includes('ri')) setSchool('RI');
+      else if (fname.includes('hci')) setSchool('HCI');
+      else if (fname.includes('nyjc')) setSchool('NYJC');
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        setSelectedFile(file);
+        const fname = file.name.toLowerCase();
+        if (fname.includes('ejc')) setSchool('EJC');
+        else if (fname.includes('jpjc')) setSchool('JPJC');
+        else if (fname.includes('ri')) setSchool('RI');
+        else if (fname.includes('hci')) setSchool('HCI');
+      } else {
+        setIngestionError('Only PDF files are supported.');
+      }
+    }
+  };
+
+  const handleDirectUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      setIngestionError('Please select a Question Paper PDF to upload.');
+      return;
+    }
+
+    setIsIngesting(true);
+    setIngestionError(null);
+    setIngestionMessage(null);
+
+    setIngestionLogs([
+      { step: 'Uploading and computing SHA-256 cryptographic source fingerprint...', status: 'active' },
+      { step: 'Extracting question stems, marks, and vector diagram boundaries...', status: 'pending' },
+      { step: 'Classifying syllabus taxonomy and scoring confidence...', status: 'pending' },
+      { step: 'Synchronizing 1:1 step-by-step worked solutions...', status: 'pending' },
+      { step: 'Committing to persistent Question Bank and Review Queue...', status: 'pending' },
+    ]);
+
+    try {
+      setTimeout(() => {
+        setIngestionLogs((prev) =>
+          prev.map((log, idx) =>
+            idx === 0 ? { ...log, status: 'done' } : idx === 1 ? { ...log, status: 'active' } : log
+          )
+        );
+      }, 500);
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('school', school);
+      formData.append('year', year.toString());
+      formData.append('subject', subject);
+      formData.append('paperNumber', paperNumber.toString());
+
+      const res = await fetch('/api/sources', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setIngestionLogs((prev) => prev.map((log) => ({ ...log, status: 'done' })));
+        setIngestionError(data.message || data.error || 'Upload failed.');
+        setIsIngesting(false);
+        return;
+      }
+
+      setIngestionLogs((prev) => prev.map((log) => ({ ...log, status: 'done' })));
+      setIngestionMessage(
+        `✓ ${data.message} (${data.questionsIngested} questions, ${data.telemetry?.totalMarks} marks in ${data.telemetry?.processingTimeMs}ms)`
+      );
+      setSelectedFile(null);
+      await fetchSources();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Network error during upload.';
+      setIngestionError(msg);
+    } finally {
+      setIsIngesting(false);
+    }
+  };
+
   const simulateIngestion = async (paperType: 'paper_3' | 'paper_4') => {
     setIsIngesting(true);
     setIngestionError(null);
@@ -83,7 +189,6 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
     ]);
 
     try {
-      // Progress animation
       setTimeout(() => {
         setIngestionLogs((prev) =>
           prev.map((log, idx) =>
@@ -137,7 +242,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
             <span>Singapore Junior College Source Documents</span>
           </h1>
           <p className="text-xs text-[#94a3b8] font-mono mt-1">
-            Immutable Storage & SHA-256 Idempotency Engine • Real A-Level Assessment Pipeline
+            Immutable Storage & SHA-256 Idempotency Engine • Direct File Upload & Ingestion Pipeline
           </p>
         </div>
 
@@ -207,14 +312,14 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                   <FileArchive size={32} className="mx-auto text-[#64748b] mb-3" />
                   <div className="font-semibold text-sm text-[#f1f5f9]">No Examination Papers Ingested Yet</div>
                   <p className="mt-1 text-xs text-[#64748b] max-w-md mx-auto">
-                    Production simulation mode: 0 source documents. Click &quot;Upload Source Paper&quot; above to simulate ingestion of authentic Singapore JC papers.
+                    Production clean state: 0 source documents. Click &quot;Upload Source Paper&quot; above to select and upload your examination PDF.
                   </p>
                   <button
                     onClick={() => setIsModalOpen(true)}
                     className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-surface-2 hover:bg-surface-3 border border-border-active hover:border-primary-cyan text-xs text-primary-cyan font-medium transition-all"
                   >
                     <Upload size={13} />
-                    <span>Open Ingestion Console</span>
+                    <span>Upload Examination PDF</span>
                   </button>
                 </td>
               </tr>
@@ -262,10 +367,10 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
         </table>
       </div>
 
-      {/* Upload & Production Simulation Modal */}
+      {/* Upload & Ingestion Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-surface-1 border border-border-active rounded-xl max-w-2xl w-full p-6 shadow-2xl space-y-6 text-[#f1f5f9]">
+          <div className="bg-surface-1 border border-border-active rounded-xl max-w-2xl w-full p-6 shadow-2xl space-y-5 text-[#f1f5f9]">
             <div className="flex items-center justify-between border-b border-border-subdued pb-4">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded bg-primary-cyan/15 text-primary-cyan">
@@ -288,67 +393,237 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
               </button>
             </div>
 
-            {/* Quick Simulation Cards */}
-            <div className="space-y-3">
-              <div className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider font-mono flex items-center gap-1.5">
-                <Sparkles size={13} className="text-primary-cyan" />
-                <span>Simulate Production Upload (Authentic Examination Papers)</span>
-              </div>
+            {/* Mode Switcher Tabs */}
+            <div className="flex items-center gap-2 border-b border-border-subdued pb-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('upload')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  activeTab === 'upload'
+                    ? 'bg-surface-3 text-primary-cyan border border-primary-cyan/40 shadow-sm'
+                    : 'text-[#94a3b8] hover:text-[#f1f5f9] hover:bg-surface-2'
+                }`}
+              >
+                <Upload size={13} />
+                <span>Upload PDF File</span>
+              </button>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Paper 3 Card */}
-                <div className="p-4 rounded-lg bg-surface-2 border border-border-subdued hover:border-primary-cyan/50 transition-all flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-primary-cyan/15 text-primary-cyan border border-primary-cyan/30">
-                        JPJC 2022
-                      </span>
-                      <span className="text-[11px] font-mono text-[#94a3b8]">104 Marks</span>
-                    </div>
-                    <h3 className="font-semibold text-xs text-[#f1f5f9] mt-2">Promo Practise Paper 3</h3>
-                    <p className="text-[11px] text-[#94a3b8] mt-1 line-clamp-2">
-                      13 questions + 14 pages of step-by-step solutions: Inequalities, Calculus (differentiation, integration), Vectors, Curve transformations.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => simulateIngestion('paper_3')}
-                    disabled={isIngesting}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded bg-primary-cyan/20 hover:bg-primary-cyan/30 text-primary-cyan border border-primary-cyan/40 text-xs font-medium transition-all disabled:opacity-50"
-                  >
-                    <Layers size={13} />
-                    <span>Ingest Paper 3 (JPJC)</span>
-                    <ChevronRight size={13} />
-                  </button>
-                </div>
-
-                {/* Paper 4 Card */}
-                <div className="p-4 rounded-lg bg-surface-2 border border-border-subdued hover:border-primary-cyan/50 transition-all flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-primary-cyan/15 text-primary-cyan border border-primary-cyan/30">
-                        EJC + DHS 2022
-                      </span>
-                      <span className="text-[11px] font-mono text-[#94a3b8]">102 Marks</span>
-                    </div>
-                    <h3 className="font-semibold text-xs text-[#f1f5f9] mt-2">Promo Practise Paper 4</h3>
-                    <p className="text-[11px] text-[#94a3b8] mt-1 line-clamp-2">
-                      13 questions + 14 pages of step-by-step solutions: Polynomials Remainder Theorem, AP/GP sequences, 3D Vectors, Tent optimization.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => simulateIngestion('paper_4')}
-                    disabled={isIngesting}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded bg-primary-cyan/20 hover:bg-primary-cyan/30 text-primary-cyan border border-primary-cyan/40 text-xs font-medium transition-all disabled:opacity-50"
-                  >
-                    <Layers size={13} />
-                    <span>Ingest Paper 4 (EJC/DHS)</span>
-                    <ChevronRight size={13} />
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('simulate')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  activeTab === 'simulate'
+                    ? 'bg-surface-3 text-primary-cyan border border-primary-cyan/40 shadow-sm'
+                    : 'text-[#94a3b8] hover:text-[#f1f5f9] hover:bg-surface-2'
+                }`}
+              >
+                <Sparkles size={13} />
+                <span>1-Click Practice Papers</span>
+              </button>
             </div>
+
+            {/* TAB 1: Direct File Upload Form */}
+            {activeTab === 'upload' && (
+              <form onSubmit={handleDirectUpload} className="space-y-4">
+                {/* Drag and drop zone */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`p-6 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all ${
+                    isDragging
+                      ? 'border-primary-cyan bg-primary-cyan/10'
+                      : selectedFile
+                      ? 'border-status-approved/50 bg-status-approved/5'
+                      : 'border-border-active bg-surface-2 hover:border-primary-cyan/50 hover:bg-surface-3'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+
+                  {selectedFile ? (
+                    <div className="flex items-center justify-center gap-3 text-left">
+                      <div className="p-3 rounded-lg bg-status-approved/20 text-status-approved">
+                        <FileCheck size={24} />
+                      </div>
+                      <div>
+                        <div className="font-semibold text-xs text-[#f1f5f9]">{selectedFile.name}</div>
+                        <div className="text-[11px] font-mono text-[#94a3b8]">
+                          {(selectedFile.size / 1024).toFixed(1)} KB • PDF Document
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedFile(null);
+                        }}
+                        className="ml-4 p-1 rounded hover:bg-surface-1 text-[#94a3b8] hover:text-red-400"
+                        title="Remove file"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-primary-cyan/10 text-primary-cyan flex items-center justify-center mx-auto">
+                        <FileText size={20} />
+                      </div>
+                      <div className="text-xs font-medium text-[#f1f5f9]">
+                        Click to browse or drag and drop examination PDF
+                      </div>
+                      <div className="text-[11px] text-[#64748b]">
+                        Supports Singapore A-Level Question Papers (`.pdf`)
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Metadata Settings */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">Junior College</label>
+                    <select
+                      value={school}
+                      onChange={(e) => setSchool(e.target.value as SingaporeSchoolCode)}
+                      className="w-full bg-surface-2 border border-border-subdued rounded px-2.5 py-1.5 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none"
+                    >
+                      {Object.keys(SINGAPORE_SCHOOLS).map((code) => (
+                        <option key={code} value={code}>
+                          {code} - {SINGAPORE_SCHOOLS[code as SingaporeSchoolCode].name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">Exam Year</label>
+                    <input
+                      type="number"
+                      value={year}
+                      onChange={(e) => setYear(parseInt(e.target.value, 10))}
+                      min={2018}
+                      max={2026}
+                      className="w-full bg-surface-2 border border-border-subdued rounded px-2.5 py-1.5 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">Subject</label>
+                    <select
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="w-full bg-surface-2 border border-border-subdued rounded px-2.5 py-1.5 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none"
+                    >
+                      <option value="mathematics">H2 Mathematics (9758)</option>
+                      <option value="chemistry">H2 Chemistry (9476)</option>
+                      <option value="physics">H2 Physics (9749)</option>
+                      <option value="biology">H2 Biology (9744)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">Paper Number</label>
+                    <select
+                      value={paperNumber}
+                      onChange={(e) => setPaperNumber(parseInt(e.target.value, 10))}
+                      className="w-full bg-surface-2 border border-border-subdued rounded px-2.5 py-1.5 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none font-mono"
+                    >
+                      <option value={1}>Paper 1</option>
+                      <option value={2}>Paper 2</option>
+                      <option value={3}>Paper 3</option>
+                      <option value={4}>Paper 4</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={!selectedFile || isIngesting}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded bg-primary-cyan hover:bg-primary-cyan/90 text-surface-0 font-semibold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-primary-cyan/20"
+                  >
+                    <Upload size={14} />
+                    <span>Upload & Ingest Paper</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 2: Quick Practice Paper Simulation */}
+            {activeTab === 'simulate' && (
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider font-mono flex items-center gap-1.5">
+                  <Sparkles size={13} className="text-primary-cyan" />
+                  <span>Instant 1-Click Ingestion (Promo Practice Papers)</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Paper 3 Card */}
+                  <div className="p-4 rounded-lg bg-surface-2 border border-border-subdued hover:border-primary-cyan/50 transition-all flex flex-col justify-between space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-primary-cyan/15 text-primary-cyan border border-primary-cyan/30">
+                          JPJC 2022
+                        </span>
+                        <span className="text-[11px] font-mono text-[#94a3b8]">104 Marks</span>
+                      </div>
+                      <h3 className="font-semibold text-xs text-[#f1f5f9] mt-2">Promo Practise Paper 3</h3>
+                      <p className="text-[11px] text-[#94a3b8] mt-1 line-clamp-2">
+                        13 questions + 14 pages of step-by-step solutions: Inequalities, Calculus (differentiation, integration), Vectors, Curve transformations.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => simulateIngestion('paper_3')}
+                      disabled={isIngesting}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded bg-primary-cyan/20 hover:bg-primary-cyan/30 text-primary-cyan border border-primary-cyan/40 text-xs font-medium transition-all disabled:opacity-50"
+                    >
+                      <Layers size={13} />
+                      <span>Ingest Paper 3 (JPJC)</span>
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+
+                  {/* Paper 4 Card */}
+                  <div className="p-4 rounded-lg bg-surface-2 border border-border-subdued hover:border-primary-cyan/50 transition-all flex flex-col justify-between space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-primary-cyan/15 text-primary-cyan border border-primary-cyan/30">
+                          EJC + DHS 2022
+                        </span>
+                        <span className="text-[11px] font-mono text-[#94a3b8]">102 Marks</span>
+                      </div>
+                      <h3 className="font-semibold text-xs text-[#f1f5f9] mt-2">Promo Practise Paper 4</h3>
+                      <p className="text-[11px] text-[#94a3b8] mt-1 line-clamp-2">
+                        13 questions + 14 pages of step-by-step solutions: Polynomials Remainder Theorem, AP/GP sequences, 3D Vectors, Tent optimization.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => simulateIngestion('paper_4')}
+                      disabled={isIngesting}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded bg-primary-cyan/20 hover:bg-primary-cyan/30 text-primary-cyan border border-primary-cyan/40 text-xs font-medium transition-all disabled:opacity-50"
+                    >
+                      <Layers size={13} />
+                      <span>Ingest Paper 4 (EJC/DHS)</span>
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Ingestion Telemetry & Logs */}
             {isIngesting && (
@@ -388,6 +663,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
 
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-border-subdued">
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
                 disabled={isIngesting}
                 className="px-4 py-2 rounded bg-surface-2 hover:bg-surface-3 text-xs text-[#cbd5e1] font-medium transition-all"
