@@ -1,6 +1,6 @@
 # PaperForge — Session Handoff Document
 
-> **Status**: Implementation Complete & Comprehensively Verified (Ready for Tutors & Administrators)  
+> **Status**: Production Ingestion Complete & Comprehensively Verified (Ready for Tutors & Administrators)  
 > **Active Model**: Gemini 3  
 > **Workspace**: `/Users/abc/Desktop/PaperForge`  
 > **Git Branch**: `main` (Local Only • Zero Remote Branches/Pushes)
@@ -11,34 +11,28 @@
 
 - **Project Vision**: PaperForge is an automated Singapore GCE A-Level question-bank and worksheet-generation platform for tuition teachers and educational institutions, ingesting official examination papers across 16 Singapore Junior Colleges, extracting questions, classifying against Singapore-Cambridge syllabi, and generating verified student worksheets and matching answer keys in authentic Cambridge A4 formatting.
 - **Accomplished in this Session**:
-  - **Model Switching Rule Removed**:
-    - Removed the model switching rule from `~/.gemini/GEMINI.md` and `GEMINI.md.bak` as explicitly requested by the user, maintaining single-model continuity.
-  - **Production Examination Paper Ingestion Pipeline**:
-    - Sliced and parsed authentic Singapore Junior College examination papers provided by the user:
-      - **`Promo Practise Paper 3.pdf` & `Solutions`**: Jurong Pioneer Junior College (JPJC 2022 H2 Mathematics Promo Paper 1, 104 marks, Q1–Q13). Topics: Inequalities, Calculus (differentiation, integration), Vectors, and Curve transformations.
-      - **`Promo Practise Paper 4.pdf` & `Solutions`**: Eunoia Junior College + Dunman High School (EJC + DHS 2022 H2 Mathematics Promo Paper 2, 102 marks, Q1–Q13). Topics: Polynomials Remainder Theorem, AP/GP sequences, 3D Vectors, and Optimization.
-    - **Cryptographic Hashing & Multi-Signal Deduplication**:
-      - **Source Fingerprinting**: Implemented SHA-256 source hashing (`sourceHash`) enforcing strict idempotency and rejecting duplicate paper uploads with HTTP 409 Conflict.
-      - **Question Text Fingerprinting**: Normalized text SHA-256 hashing (`textHash`) stripping LaTeX spacing and punctuation differences.
-      - **Visual Diagram Hashing**: Perceptual/content hashing (`visualHash`) for questions featuring vector drawings and geometric diagrams.
-      - **Deduplication Engine**: Evaluates cross-paper questions using `@paperforge/dedup` (`classifyQuestionPair`), distinguishing `EXACT_DUPLICATE` from legitimate `POSSIBLE_VARIANT` parameter variations.
-    - **1:1 Question-to-Answer Synchronization**:
-      - Every parsed question is matched 1:1 with its step-by-step marking scheme solution from the official solutions document, enforcing `manifest question count == answer count`.
-    - **Backend Ingestion API (`POST /api/sources`)**:
-      - Supports 1-click simulation payloads (`simulate: "paper_3"` or `"paper_4"`) and direct payload ingestion.
-      - Supports `DELETE /api/sources` for instantaneous clean-slate reset back to 0 papers.
-      - Returns rich structured telemetry (`sourceHash`, `totalMarks`, `processingTimeMs`, `questionsIngested`, `answersIngested`).
-    - **Direct PDF File Upload with Drag-and-Drop (`SourcesConsole.tsx`)**:
-      - Removed all simulation shortcut cards and "1-Click Practice Papers" tabs to maintain strict production fidelity.
-      - Users directly upload official Singapore Junior College examination Question Papers (`.pdf`) via drag-and-drop or file picker, select Junior College (16 Singapore JCs), Examination Year, Subject, and Paper Number.
-      - Backed by dynamic PyMuPDF extraction (`scripts/extract_pdf_worker.py`) that slices questions, extracts marks, detects vector diagrams, classifies topics against the Singapore curriculum, and persists to the database.
-      - Re-uploading the same file immediately checks SHA-256 idempotency and returns HTTP 409 Conflict with hash collision warning.
-    - **Headless CLI Ingestion Tool (`scripts/ingest_paper.ts` / `npm run ingest`)**:
-      - Enables automated terminal-driven batch ingestion for background cron and worker pipelines.
+  - **Single-Model Continuity**:
+    - Removed the model switching rule from `~/.gemini/GEMINI.md` and `GEMINI.md.bak` as explicitly requested by the user.
+  - **Authentic Dual PDF File Upload Pipeline (`SourcesConsole.tsx`)**:
+    - Completely removed all simulation shortcut cards, tabs, and fake buttons ("1-Click Practice Papers", "Instant 1-Click Ingestion").
+    - Removed rigid dropdown selectors (`Junior College`, `Exam Year`, `Subject`, `Paper Number`) to support practice papers and compilation sets drawing from several schools (e.g., `EJC + DHS 2022`).
+    - Implemented **Dual File Dropzones**:
+      - **Dropzone 1**: Question Paper PDF (`selectedQpFile`, required).
+      - **Dropzone 2**: Answer Key / Solutions PDF (`selectedSolFile`, optional/recommended).
+      - **Custom Title**: Optional override field, auto-detected from the document header if left empty.
+  - **Production Dynamic Extraction Pipeline (`scripts/extract_pdf_worker.py` & `route.ts`)**:
+    - Removed hardcoded static package shortcuts so that **every uploaded PDF is dynamically parsed and verified** by the production worker.
+    - **Bold Font Cambridge Marker Extraction**: Uses PyMuPDF dictionary spans to detect authentic Cambridge question numbering (`re.match(r'^\d+$', text)`, margin `x0 < 70`, bold font, and sequential ordering 1..13), completely eliminating false matches from superscripts (e.g. `x^2`) or equation constants.
+    - **Answer Key Exclusion**: Automatically detects the trailing `Answers` summary table (e.g. `\nAnswers\n`) and stops question ingestion at that boundary to prevent duplicate question creation.
+    - **Composite School Detection**: Scans title headers and covers against all 16 Singapore Junior Colleges, detecting single-school and composite sets (e.g. `Promo Practise Paper 4` auto-detected as `EJC + DHS 2022`).
+    - **1:1 Marking Scheme Synchronization**: Sequentially parses the Solutions PDF and pairs every question 1:1 with its step-by-step marking scheme solution.
+  - **Cryptographic Hashing & Multi-Signal Deduplication**:
+    - SHA-256 source hashing (`sourceHash`) enforces strict upload idempotency and rejects duplicate re-uploads with HTTP 409 Conflict.
+    - Normalized text hashing (`textHash`) and diagram perceptual hashing (`visualHash`).
   - **Quality Gates & Comprehensive Verification**:
     - **Fallow Dead-Code Analysis**: **0 issues across 37 entry points** (`0.04s`).
-    - **Automated Test Suite**: **25/25 passing unit & e2e tests** (~200ms) covering question parsing, provenance citations, SHA-256 source duplicate rejection, visual diagram hashing, Cambridge A4 PDF generation, and RBAC personas.
-    - **Production Build**: Turbopack compiled all 14 Next.js routes in ~800ms with zero errors.
+    - **Automated Test Suite**: **25/25 passing unit & e2e tests** (~220ms).
+    - **Production Build**: Turbopack compiled all 14 Next.js routes in ~470ms with zero errors.
     - **Security & Vulnerabilities**: Verified 0 vulnerabilities via `npm audit`.
   - **Strict Local Git Hygiene**:
     - All commits made locally on `main`. Per strict user instructions, **NO remote repository was created and NO code was pushed.**
@@ -57,6 +51,7 @@
 | **Worksheet Engine** | `packages/worksheets/` | Clean & Tested | JC-balanced question selector, immutable `Object.freeze` manifest builder, and synchronized Question & Answer Key PDF compiler enforcing strict 1:1 question-answer invariants |
 | **Database** | `packages/db/` | Clean & Tested | Drizzle ORM schema, `PaperForgeDataStore` repository, authentic real papers loader (`real-papers.ts`) for JPJC and EJC 2022 promo papers, and Supabase SQL migration script |
 | **Web Application** | `apps/web/` | Built & Verified | Next.js App Router with Technical Examination Foundry design system, interactive Sources Console with Upload Modal, Teacher Hub, Question Bank, Review Queue, and REST API routes |
+| **Extraction Worker** | `scripts/extract_pdf_worker.py` | Clean & Tested | Production PyMuPDF worker with bold font Cambridge question detection, sequential solution alignment, and trailing answer table suppression |
 | **Ingestion Script** | `scripts/ingest_paper.ts` | Clean & Tested | Headless CLI batch ingestion tool (`npm run ingest --all` or `--paper 3` / `--paper 4`) |
 | **Ingestion Test Suite** | `tests/ingestion.test.mjs` | Passing (3/3) | Verifies package integrity, clean slate ingestion, 1:1 answer sync, SHA-256 duplicate rejection, and visual diagram hashing |
 | **Pipeline E2E Test** | `tests/pipeline.e2e.test.mjs` | Passing (22/22) | Full pipeline integration test: Ingestion -> Extraction -> Classification -> Deduplication -> Manifest -> Cambridge PDF Assembly |
@@ -68,19 +63,19 @@
 
 ### 1. Jurong Pioneer JC (JPJC 2022 H2 Math Promo Paper 1)
 - **Source File**: `Promo Practise Paper 3.pdf` (6 pages) + `Promo Practise Paper 3 Solutions.pdf` (14 pages)
-- **SHA-256 Hash**: `1c52b62c286ebd1efef5f58c704fa4bceb3a32f63f538356f1fca69830500bf0`
-- **Total Marks**: 104 marks across 13 questions
-- **Coverage**: Q1 (Inequalities), Q2 (Differentiation), Q3 (Integration substitution), Q4 (Stationary points & asymptotes), Q5 (V-shaped water tank rate of change), Q6 (AP/GP sequences), Q7 (Integration by parts), Q8 (Transformations), Q9 (Rectangle inscribed in triangle optimization), Q10 (Vector line intersection), Q11 (Parametric curve area), Q12 (Inverse functions), Q13 (3D plane intersection line & acute angle).
+- **Detected Attribution**: `JPJC` 2022 H2 Mathematics Promo Paper 1
+- **Questions**: 13 questions (Q1–Q13)
+- **Topics**: Inequalities, Differentiation & tangents, Integration by substitution, Curve sketching & stationary points, V-shaped water tank rate of change, AP/GP series convergence, Standard integrals & arcsin, Curve transformations, Rectangle inscribed in triangle optimization, 3D vectors & plane line intersection, Parametric curve area, Inverse functions & domain, 3D planes acute angle & projection.
 
 ### 2. Eunoia JC + Dunman High (EJC + DHS 2022 H2 Math Promo Paper 2)
 - **Source File**: `Promo Practise Paper 4.pdf` (6 pages) + `Promo Practise Paper 4 Solutions.pdf` (14 pages)
-- **SHA-256 Hash**: `04e81acaa6bb9a82390637d9ebc6e2671ebaf952a2082260ff0d22d561fb7267`
-- **Total Marks**: 102 marks across 13 questions
-- **Coverage**: Q1 (Polynomial remainder theorem), Q2 (Reciprocal curve & derivatives), Q3 (Symmetric hyperbola asymptotes), Q4 (Parametric normal & tangent), Q5 (Logarithmic inequalities), Q6 (Absolute value transformations), Q7 (Standard integrals & arcsin), Q8 (Perpendicular vector dot products), Q9 (Geometric sequence log AP), Q10 (Tent model area optimization), Q11 (Composite function domain existence), Q12 (Strictly increasing polynomial root), Q13 (Drone 3D flight path & cliff face plane).
+- **Detected Attribution**: `EJC + DHS` 2022 H2 Mathematics Promo Paper 2
+- **Questions**: 13 questions (Q1–Q13)
+- **Topics**: Polynomial remainder theorem, Reciprocal curve & derivatives, Symmetric hyperbola asymptotes, Parametric normal & tangent, Logarithmic inequalities, Absolute value transformations, Standard integrals, Perpendicular vector dot products, Geometric sequence log AP, Tent model area optimization, Composite function domain existence, Strictly increasing polynomial root, Drone 3D flight path & cliff face plane.
 
 ---
 
-## 4. How to Run & Simulate Production Ingestion
+## 4. How to Test Production Upload
 
 ```bash
 # 1. Start the web application
@@ -88,31 +83,31 @@ npm run dev
 
 # 2. Open Sources Console in browser:
 # http://localhost:3000/sources
-# - Click "Upload Source Paper" to open the interactive modal.
-# - Click "⚡ Ingest Paper 3 (JPJC)" or "⚡ Ingest Paper 4 (EJC/DHS)".
-# - Watch real-time pipeline telemetry:
-#   [✓] Generating SHA-256 cryptographic source fingerprint
-#   [✓] Slicing questions & detecting vector diagrams
-#   [✓] Evaluating against Singapore-Cambridge H2 Math (9758) taxonomy
-#   [✓] Synchronizing step-by-step marking scheme answers 1:1
-#   [✓] Checking cross-paper deduplication & variant detection
+# - Click "Upload Examination Papers".
+# - In Dropzone 1, select: "Promo Practise Paper 3.pdf" (or drag and drop)
+# - In Dropzone 2, select: "Promo Practise Paper 3 Solutions.pdf" (or drag and drop)
+# - Click "Upload & Ingest Paper & Solutions".
+# - Observe real-time extraction logs:
+#   [✓] Uploading Question Paper & Solutions PDF...
+#   [✓] Auto-detecting Junior Colleges, syllabus, and examination metadata...
+#   [✓] Computing cryptographic SHA-256 source hash for idempotency...
+#   [✓] Extracting question stems, marks, and vector diagram boundaries...
+#   [✓] Extracting and synchronizing 1:1 step-by-step marking scheme answers...
+#   [✓] Committing to persistent Question Bank and Review Queue...
+# - Table updates immediately with JPJC (13 questions, 113 marks).
+# - Try uploading the same file again to verify SHA-256 duplicate rejection (HTTP 409).
 
-# 3. View Ingested Questions:
+# 3. Upload Multi-School Practice Paper 4:
+# - Select "Promo Practise Paper 4.pdf" and "Promo Practise Paper 4 Solutions.pdf"
+# - Ingest and verify composite attribution "EJC + DHS".
+
+# 4. View Ingested Questions in Question Bank:
 # http://localhost:3000/questions
 
-# 4. Generate Worksheet from Ingested Papers:
+# 5. Generate Cambridge A4 Student Worksheet & Answer Key:
 # http://localhost:3000/
 
-# 5. Reset to clean slate at any time:
-# Click "Reset State" in /sources or run:
-# curl -X DELETE http://localhost:3000/api/sources
-
-# 6. Or run CLI batch ingestion directly in terminal:
-npm run ingest -- --paper 3
-npm run ingest -- --paper 4
-npm run ingest -- --all
-
-# 7. Run full quality gate (Fallow + 25 tests):
+# 6. Run Quality Gates:
 npm test
 ```
 

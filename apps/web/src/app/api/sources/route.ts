@@ -6,8 +6,6 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   getGlobalStore,
-  REAL_PAPER_3_PACKAGE,
-  REAL_PAPER_4_PACKAGE,
   ingestPaperPackage,
 } from '@paperforge/db';
 import {
@@ -41,7 +39,7 @@ export async function POST(request: Request) {
     const store = getGlobalStore();
     const contentType = request.headers.get('content-type') || '';
 
-    // 1. JSON Payload: Simulation & Reset
+    // 1. JSON Payload: Administrative Reset
     if (contentType.includes('application/json')) {
       const body = await request.json();
 
@@ -54,51 +52,49 @@ export async function POST(request: Request) {
         });
       }
 
-      if (body.simulate === 'paper_3' || body.simulate === 'jpjc_2022' || body.paperKey === 'jpjc_2022_paper_3') {
-        const result = ingestPaperPackage(store, REAL_PAPER_3_PACKAGE);
-        const statusCode = result.duplicate ? 409 : result.success ? 201 : 400;
-        return NextResponse.json(result, { status: statusCode });
-      }
-
-      if (body.simulate === 'paper_4' || body.simulate === 'ejc_2022' || body.paperKey === 'ejc_2022_paper_4') {
-        const result = ingestPaperPackage(store, REAL_PAPER_4_PACKAGE);
-        const statusCode = result.duplicate ? 409 : result.success ? 201 : 400;
-        return NextResponse.json(result, { status: statusCode });
-      }
-
       return NextResponse.json(
         {
           success: false,
-          error: 'Unrecognized simulation parameter. Supported values: paper_3, paper_4, reset.',
+          error: 'Please upload examination papers using multipart form data.',
         },
         { status: 400 }
       );
     }
 
-    // 2. Multipart Form Data: Real Direct PDF Upload
+    // 2. Multipart Form Data: Direct Question Paper & Solutions Upload
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
       const file = formData.get('file') as File | null;
-      const school = ((formData.get('school') as string) || 'JPJC').toUpperCase() as SingaporeSchoolCode;
-      const year = parseInt((formData.get('year') as string) || '2022', 10);
-      const subject = ((formData.get('subject') as string) || 'mathematics') as SubjectId;
-      const paperNumber = parseInt((formData.get('paperNumber') as string) || '1', 10);
+      const solutionsFile = formData.get('solutionsFile') as File | null;
+      const customTitle = ((formData.get('title') as string) || '').trim();
 
       if (!file) {
         return NextResponse.json(
-          { success: false, error: 'No PDF file attached. Please select a Question Paper PDF.' },
+          { success: false, error: 'No Question Paper PDF attached. Please select a Question Paper file.' },
           { status: 400 }
         );
       }
 
       const fileBuffer = Buffer.from(await file.arrayBuffer());
 
-      // Validate PDF magic bytes
+      // Validate Question Paper PDF magic bytes
       if (fileBuffer.length < 4 || fileBuffer.subarray(0, 4).toString('ascii') !== '%PDF') {
         return NextResponse.json(
-          { success: false, error: 'Invalid file format: Uploaded file is not a valid PDF document.' },
+          { success: false, error: 'Invalid Question Paper: Uploaded file is not a valid PDF document.' },
           { status: 400 }
         );
+      }
+
+      // Validate Solutions Paper PDF if provided
+      let solutionsBuffer: Buffer | null = null;
+      if (solutionsFile && solutionsFile.size > 0) {
+        solutionsBuffer = Buffer.from(await solutionsFile.arrayBuffer());
+        if (solutionsBuffer.length < 4 || solutionsBuffer.subarray(0, 4).toString('ascii') !== '%PDF') {
+          return NextResponse.json(
+            { success: false, error: 'Invalid Solutions Paper: Uploaded file is not a valid PDF document.' },
+            { status: 400 }
+          );
+        }
       }
 
       // Compute Cryptographic SHA-256 Source Hash
@@ -119,82 +115,52 @@ export async function POST(request: Request) {
       }
 
       const startTime = Date.now();
-      const filename = file.name || `uploaded_paper_${Date.now()}.pdf`;
+      const filename = file.name || `examination_paper_${Date.now()}.pdf`;
 
-      // Check if uploaded file corresponds to Paper 3 or Paper 4 (by hash or filename)
-      if (
-        sourceHash === REAL_PAPER_3_PACKAGE.source.sourceHash ||
-        filename.toLowerCase().includes('paper 3') ||
-        filename.toLowerCase().includes('paper3')
-      ) {
-        const customPackage = {
-          ...REAL_PAPER_3_PACKAGE,
-          source: {
-            ...REAL_PAPER_3_PACKAGE.source,
-            filename,
-            school,
-            year,
-            paperNumber,
-            sourceHash,
-          },
-        };
-        const result = ingestPaperPackage(store, customPackage);
-        return NextResponse.json(result, { status: 201 });
+      // Dynamically extract questions, diagrams, and solutions using Python PyMuPDF worker
+      const tempQpPath = path.join('/tmp', `paperforge_qp_${Date.now()}_${path.basename(filename)}`);
+      await fs.writeFile(tempQpPath, fileBuffer);
+
+      let tempSolPath = 'none';
+      if (solutionsBuffer) {
+        tempSolPath = path.join('/tmp', `paperforge_sol_${Date.now()}_${solutionsFile?.name || 'sol.pdf'}`);
+        await fs.writeFile(tempSolPath, solutionsBuffer);
       }
-
-      if (
-        sourceHash === REAL_PAPER_4_PACKAGE.source.sourceHash ||
-        filename.toLowerCase().includes('paper 4') ||
-        filename.toLowerCase().includes('paper4')
-      ) {
-        const customPackage = {
-          ...REAL_PAPER_4_PACKAGE,
-          source: {
-            ...REAL_PAPER_4_PACKAGE.source,
-            filename,
-            school,
-            year,
-            paperNumber,
-            sourceHash,
-          },
-        };
-        const result = ingestPaperPackage(store, customPackage);
-        return NextResponse.json(result, { status: 201 });
-      }
-
-      // For any other uploaded PDF, dynamically extract using Python PyMuPDF worker
-      const tempPath = path.join('/tmp', `paperforge_upload_${Date.now()}_${path.basename(filename)}`);
-      await fs.writeFile(tempPath, fileBuffer);
 
       let extractedJsonText = '';
       try {
         const workerScript = path.resolve(process.cwd(), 'scripts/extract_pdf_worker.py');
         const { stdout } = await execFileAsync('python3', [
           workerScript,
-          tempPath,
-          school,
-          year.toString(),
-          subject,
-          paperNumber.toString(),
+          tempQpPath,
+          tempSolPath,
         ]);
         extractedJsonText = stdout;
       } finally {
-        await fs.unlink(tempPath).catch(() => {});
+        await fs.unlink(tempQpPath).catch(() => {});
+        if (tempSolPath !== 'none') {
+          await fs.unlink(tempSolPath).catch(() => {});
+        }
       }
 
       const parsedData = JSON.parse(extractedJsonText);
       const rawQuestions = parsedData.questions || [];
+      const primarySchool: SingaporeSchoolCode = parsedData.source?.school || 'JPJC';
+      const detectedYear: number = parsedData.source?.year || 2022;
+      const detectedSubject: SubjectId = parsedData.source?.subject || 'mathematics';
+      const detectedPaperNumber: number = parsedData.source?.paperNumber || 1;
+      const compositeAttribution: string = parsedData.source?.composite_attribution || primarySchool;
 
       const newSource: SourceDocument = {
-        id: `src_${school.toLowerCase()}_${subject}_${year}_p${paperNumber}_${Date.now()}`,
-        filename,
-        school,
-        year,
-        subject,
+        id: `src_${primarySchool.toLowerCase()}_${detectedSubject}_${detectedYear}_p${detectedPaperNumber}_${Date.now()}`,
+        filename: customTitle || filename,
+        school: primarySchool,
+        year: detectedYear,
+        subject: detectedSubject,
         paperType: 'PROMO',
-        paperNumber,
+        paperNumber: detectedPaperNumber,
         sourceHash,
-        storageKey: `sources/${year}/${school}_${subject}_P${paperNumber}.pdf`,
+        storageKey: `sources/${detectedYear}/${primarySchool}_${detectedSubject}_P${detectedPaperNumber}.pdf`,
         pageCount: parsedData.source?.pageCount || 1,
         status: 'READY',
         createdAt: new Date().toISOString(),
@@ -205,22 +171,23 @@ export async function POST(request: Request) {
       const answers: Answer[] = [];
 
       for (const rq of rawQuestions) {
-        const qid = `${school.toLowerCase()}-${year}-p${paperNumber}-q${String(rq.num).padStart(2, '0')}`;
+        const qid = `${primarySchool.toLowerCase()}-${detectedYear}-p${detectedPaperNumber}-q${String(rq.num).padStart(2, '0')}`;
         const aid = `ans-${qid}`;
         const prov = formatProvenance(
-          school,
-          year,
-          subject === 'mathematics' ? 'H2 Mathematics' : subject.toUpperCase(),
+          primarySchool,
+          detectedYear,
+          detectedSubject === 'mathematics' ? 'H2 Mathematics' : detectedSubject.toUpperCase(),
           'PROMO',
-          paperNumber,
+          detectedPaperNumber,
           `Q${rq.num}`,
           newSource.id
         );
+        prov.citation = `[${compositeAttribution} ${detectedYear} H2 Math Promo P${detectedPaperNumber} Q${rq.num}]`;
 
-        const classification = classifyQuestionContent(subject, rq.text);
+        const classification = classifyQuestionContent(detectedSubject, rq.text);
         const textHash = hashNormalizedText(rq.text);
         const visualHash = rq.has_diagram
-          ? computeVisualHash(`diagram-${school}-q${rq.num}-${year}`)
+          ? computeVisualHash(`diagram-${primarySchool}-q${rq.num}-${detectedYear}`)
           : null;
 
         const q: Question = {
@@ -228,7 +195,7 @@ export async function POST(request: Request) {
           sourceId: newSource.id,
           questionNumber: String(rq.num),
           parentQuestionId: null,
-          subject,
+          subject: detectedSubject,
           chapter: classification.chapter,
           subtopic: classification.subtopic,
           syllabusVersionId: 'v2026.2',
@@ -251,16 +218,18 @@ export async function POST(request: Request) {
           updatedAt: new Date().toISOString(),
         };
 
+        const answerText = rq.solution || `Marking scheme for ${prov.citation}. Total marks awarded: ${q.marks}. Full working derived from official Cambridge assessment criteria.`;
+
         const a: Answer = {
           id: aid,
           sourceId: newSource.id,
           questionId: qid,
           questionNumber: String(rq.num),
-          answerContent: `Marking scheme for ${prov.citation}. Total marks awarded: ${q.marks}. Full working derived from official Cambridge assessment criteria.`,
-          answerHash: hashNormalizedText(q.textContent),
+          answerContent: answerText,
+          answerHash: hashNormalizedText(answerText),
           markSchemeNotes: `Awarded ${q.marks} marks.`,
           provenance: prov,
-          status: 'AUTO_MATCHED',
+          status: rq.solution ? 'VERIFIED' : 'AUTO_MATCHED',
         };
 
         questions.push(q);
@@ -281,8 +250,8 @@ export async function POST(request: Request) {
           ...result,
           telemetry: {
             sourceHash,
-            school,
-            year,
+            school: compositeAttribution,
+            year: detectedYear,
             totalMarks: questions.reduce((s, q) => s + (q.marks || 0), 0),
             processingTimeMs: durationMs,
           },

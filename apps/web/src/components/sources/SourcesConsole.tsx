@@ -11,8 +11,9 @@ import {
   Trash2,
   AlertCircle,
   FileCheck,
+  Check,
 } from 'lucide-react';
-import { SourceDocument, SINGAPORE_SCHOOLS, SingaporeSchoolCode } from '@paperforge/shared';
+import { SourceDocument, SINGAPORE_SCHOOLS } from '@paperforge/shared';
 
 export interface SourcesConsoleProps {
   sources: SourceDocument[];
@@ -28,14 +29,17 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isIngesting, setIsIngesting] = useState<boolean>(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [school, setSchool] = useState<SingaporeSchoolCode>('JPJC');
-  const [year, setYear] = useState<number>(2022);
-  const [subject, setSubject] = useState<string>('mathematics');
-  const [paperNumber, setPaperNumber] = useState<number>(1);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Dual files: Question Paper + Answer Key
+  const [selectedQpFile, setSelectedQpFile] = useState<File | null>(null);
+  const [selectedSolFile, setSelectedSolFile] = useState<File | null>(null);
+  const [customTitle, setCustomTitle] = useState<string>('');
+
+  const [isDraggingQp, setIsDraggingQp] = useState<boolean>(false);
+  const [isDraggingSol, setIsDraggingSol] = useState<boolean>(false);
+
+  const qpInputRef = useRef<HTMLInputElement>(null);
+  const solInputRef = useRef<HTMLInputElement>(null);
 
   const [ingestionLogs, setIngestionLogs] = useState<IngestionLog[]>([]);
   const [ingestionMessage, setIngestionMessage] = useState<string | null>(null);
@@ -76,44 +80,50 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setSelectedFile(file);
-      const fname = file.name.toLowerCase();
-      if (fname.includes('ejc')) setSchool('EJC');
-      else if (fname.includes('jpjc')) setSchool('JPJC');
-      else if (fname.includes('ri')) setSchool('RI');
-      else if (fname.includes('hci')) setSchool('HCI');
-      else if (fname.includes('nyjc')) setSchool('NYJC');
-      else if (fname.includes('vjc')) setSchool('VJC');
+      setSelectedQpFile(file);
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleSolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedSolFile(file);
+    }
+  };
+
+  const handleQpDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    setIsDraggingQp(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-        setSelectedFile(file);
-        const fname = file.name.toLowerCase();
-        if (fname.includes('ejc')) setSchool('EJC');
-        else if (fname.includes('jpjc')) setSchool('JPJC');
-        else if (fname.includes('ri')) setSchool('RI');
-        else if (fname.includes('hci')) setSchool('HCI');
-        else if (fname.includes('nyjc')) setSchool('NYJC');
-        else if (fname.includes('vjc')) setSchool('VJC');
+        setSelectedQpFile(file);
       } else {
-        setIngestionError('Only PDF files are supported.');
+        setIngestionError('Question Paper must be a valid PDF file.');
       }
     }
   };
 
-  const handleDirectUpload = async (e: React.FormEvent) => {
+  const handleSolDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (!selectedFile) {
-      setIngestionError('Please select an Examination Question Paper PDF to upload.');
+    setIsDraggingSol(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        setSelectedSolFile(file);
+      } else {
+        setIngestionError('Answer Key must be a valid PDF file.');
+      }
+    }
+  };
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedQpFile) {
+      setIngestionError('Please select a Question Paper PDF to upload.');
       return;
     }
 
@@ -122,11 +132,12 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
     setIngestionMessage(null);
 
     setIngestionLogs([
-      { step: 'Uploading file and computing cryptographic SHA-256 source hash...', status: 'active' },
-      { step: 'Extracting question stems, marks allocation and diagram boundaries...', status: 'pending' },
-      { step: 'Classifying syllabus taxonomy and scoring confidence...', status: 'pending' },
-      { step: 'Synchronizing 1:1 step-by-step worked solutions...', status: 'pending' },
-      { step: 'Committing to Question Bank and Review Queue...', status: 'pending' },
+      { step: 'Uploading Question Paper & Solutions PDF...', status: 'active' },
+      { step: 'Auto-detecting Junior Colleges, syllabus, and examination metadata...', status: 'pending' },
+      { step: 'Computing cryptographic SHA-256 source hash for idempotency...', status: 'pending' },
+      { step: 'Extracting question stems, marks, and vector diagram boundaries...', status: 'pending' },
+      { step: 'Extracting and synchronizing 1:1 step-by-step marking scheme answers...', status: 'pending' },
+      { step: 'Committing to persistent Question Bank and Review Queue...', status: 'pending' },
     ]);
 
     try {
@@ -136,14 +147,24 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
             idx === 0 ? { ...log, status: 'done' } : idx === 1 ? { ...log, status: 'active' } : log
           )
         );
-      }, 500);
+      }, 400);
+
+      setTimeout(() => {
+        setIngestionLogs((prev) =>
+          prev.map((log, idx) =>
+            idx <= 1 ? { ...log, status: 'done' } : idx === 2 ? { ...log, status: 'active' } : log
+          )
+        );
+      }, 800);
 
       const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('school', school);
-      formData.append('year', year.toString());
-      formData.append('subject', subject);
-      formData.append('paperNumber', paperNumber.toString());
+      formData.append('file', selectedQpFile);
+      if (selectedSolFile) {
+        formData.append('solutionsFile', selectedSolFile);
+      }
+      if (customTitle.trim()) {
+        formData.append('title', customTitle.trim());
+      }
 
       const res = await fetch('/api/sources', {
         method: 'POST',
@@ -154,7 +175,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
 
       if (!res.ok || !data.success) {
         setIngestionLogs((prev) => prev.map((log) => ({ ...log, status: 'done' })));
-        setIngestionError(data.message || data.error || 'Upload failed.');
+        setIngestionError(data.message || data.error || 'Ingestion failed.');
         setIsIngesting(false);
         return;
       }
@@ -163,7 +184,9 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
       setIngestionMessage(
         `✓ ${data.message} (${data.questionsIngested} questions, ${data.telemetry?.totalMarks} marks in ${data.telemetry?.processingTimeMs}ms)`
       );
-      setSelectedFile(null);
+      setSelectedQpFile(null);
+      setSelectedSolFile(null);
+      setCustomTitle('');
       await fetchSources();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Network error during upload.';
@@ -182,7 +205,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
             <span>Singapore Junior College Source Documents</span>
           </h1>
           <p className="text-xs text-[#94a3b8] font-mono mt-1">
-            Immutable Storage & SHA-256 Idempotency Engine • Examination Paper Ingestion
+            Immutable Storage & SHA-256 Idempotency Engine • Dual QP & Answer Key Ingestion
           </p>
         </div>
 
@@ -203,7 +226,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
             className="flex items-center gap-1.5 px-4 py-2 rounded bg-primary-cyan hover:bg-primary-cyan/90 text-surface-0 font-semibold text-xs transition-all shadow-lg shadow-primary-cyan/20"
           >
             <Upload size={14} />
-            <span>Upload Source Paper</span>
+            <span>Upload Examination Papers</span>
           </button>
         </div>
       </div>
@@ -252,14 +275,14 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                   <FileArchive size={32} className="mx-auto text-[#64748b] mb-3" />
                   <div className="font-semibold text-sm text-[#f1f5f9]">No Examination Papers Ingested Yet</div>
                   <p className="mt-1 text-xs text-[#64748b] max-w-md mx-auto">
-                    Clean production state: 0 source documents. Click &quot;Upload Source Paper&quot; above to select and upload an official Singapore JC examination PDF.
+                    Clean production state: 0 source documents. Click &quot;Upload Examination Papers&quot; above to select your Question Paper and matching Answer Key PDFs.
                   </p>
                   <button
                     onClick={() => setIsModalOpen(true)}
                     className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-surface-2 hover:bg-surface-3 border border-border-active hover:border-primary-cyan text-xs text-primary-cyan font-medium transition-all"
                   >
                     <Upload size={13} />
-                    <span>Upload Examination PDF</span>
+                    <span>Upload Examination Papers</span>
                   </button>
                 </td>
               </tr>
@@ -269,7 +292,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                 return (
                   <tr key={s.id} className="hover:bg-surface-2/50 transition-colors">
                     <td className="py-3 px-4 font-bold text-[#f1f5f9]">
-                      {s.school} ({SINGAPORE_SCHOOLS[s.school]?.name})
+                      {s.school} {SINGAPORE_SCHOOLS[s.school] ? `(${SINGAPORE_SCHOOLS[s.school].name})` : ''}
                     </td>
                     <td className="py-3 px-4 text-[#dee2f1] font-sans">
                       {s.filename}
@@ -307,7 +330,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
         </table>
       </div>
 
-      {/* Upload & Ingestion Modal */}
+      {/* Upload & Ingestion Modal: Dual Question Paper + Answer Key */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
           <div className="bg-surface-1 border border-border-active rounded-xl max-w-2xl w-full p-6 shadow-2xl space-y-5 text-[#f1f5f9]">
@@ -317,9 +340,9 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                   <Upload size={18} />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-[#f1f5f9]">Upload Examination Paper</h2>
+                  <h2 className="text-base font-bold text-[#f1f5f9]">Upload Question Paper & Solutions</h2>
                   <p className="text-xs text-[#94a3b8] font-mono">
-                    SHA-256 Idempotency • Vector Slicing • 1:1 Answer Key Synchronization
+                    Auto-Metadata Detection • Multi-School / Composite Support • 1:1 Answer Key Synchronization
                   </p>
                 </div>
               </div>
@@ -333,127 +356,126 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
               </button>
             </div>
 
-            {/* Direct File Upload Form */}
-            <form onSubmit={handleDirectUpload} className="space-y-4">
-              {/* Drag and drop zone */}
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`p-6 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all ${
-                  isDragging
-                    ? 'border-primary-cyan bg-primary-cyan/10'
-                    : selectedFile
-                    ? 'border-status-approved/50 bg-status-approved/5'
-                    : 'border-border-active bg-surface-2 hover:border-primary-cyan/50 hover:bg-surface-3'
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
+            {/* Direct Dual Dropzones Form */}
+            <form onSubmit={handleUpload} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Dropzone 1: Question Paper */}
+                <div>
+                  <label className="block text-[11px] font-mono text-[#94a3b8] mb-1.5 flex items-center justify-between">
+                    <span className="font-semibold text-primary-cyan">1. Question Paper PDF *</span>
+                    <span className="text-[10px] text-[#64748b]">Required</span>
+                  </label>
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingQp(true);
+                    }}
+                    onDragLeave={() => setIsDraggingQp(false)}
+                    onDrop={handleQpDrop}
+                    onClick={() => qpInputRef.current?.click()}
+                    className={`p-4 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all min-h-[120px] flex flex-col items-center justify-center ${
+                      isDraggingQp
+                        ? 'border-primary-cyan bg-primary-cyan/10'
+                        : selectedQpFile
+                        ? 'border-status-approved/50 bg-status-approved/5'
+                        : 'border-border-active bg-surface-2 hover:border-primary-cyan/50 hover:bg-surface-3'
+                    }`}
+                  >
+                    <input
+                      ref={qpInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={handleQpChange}
+                      className="hidden"
+                    />
 
-                {selectedFile ? (
-                  <div className="flex items-center justify-center gap-3 text-left">
-                    <div className="p-3 rounded-lg bg-status-approved/20 text-status-approved">
-                      <FileCheck size={24} />
-                    </div>
-                    <div>
-                      <div className="font-semibold text-xs text-[#f1f5f9]">{selectedFile.name}</div>
-                      <div className="text-[11px] font-mono text-[#94a3b8]">
-                        {(selectedFile.size / 1024).toFixed(1)} KB • PDF Document
+                    {selectedQpFile ? (
+                      <div className="space-y-1 text-center">
+                        <div className="w-8 h-8 rounded-full bg-status-approved/20 text-status-approved flex items-center justify-center mx-auto">
+                          <FileCheck size={16} />
+                        </div>
+                        <div className="font-semibold text-xs text-[#f1f5f9] max-w-[200px] truncate mx-auto">
+                          {selectedQpFile.name}
+                        </div>
+                        <div className="text-[10px] font-mono text-[#94a3b8]">
+                          {(selectedQpFile.size / 1024).toFixed(1)} KB
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedFile(null);
-                      }}
-                      className="ml-4 p-1 rounded hover:bg-surface-1 text-[#94a3b8] hover:text-red-400"
-                      title="Remove file"
-                    >
-                      <X size={16} />
-                    </button>
+                    ) : (
+                      <div className="space-y-1">
+                        <FileText size={20} className="mx-auto text-primary-cyan/70" />
+                        <div className="text-xs font-medium text-[#f1f5f9]">Select Question Paper</div>
+                        <div className="text-[10px] text-[#64748b]">e.g. Promo Practise Paper 3.pdf</div>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="w-10 h-10 rounded-full bg-primary-cyan/10 text-primary-cyan flex items-center justify-center mx-auto">
-                      <FileText size={20} />
-                    </div>
-                    <div className="text-xs font-medium text-[#f1f5f9]">
-                      Click to browse or drag and drop examination PDF
-                    </div>
-                    <div className="text-[11px] text-[#64748b]">
-                      Supports official Singapore Junior College Question Papers (`.pdf`)
-                    </div>
+                </div>
+
+                {/* Dropzone 2: Answer Key / Solutions */}
+                <div>
+                  <label className="block text-[11px] font-mono text-[#94a3b8] mb-1.5 flex items-center justify-between">
+                    <span className="font-semibold text-[#f1f5f9]">2. Answer Key / Solutions PDF</span>
+                    <span className="text-[10px] text-[#64748b]">Highly Recommended</span>
+                  </label>
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingSol(true);
+                    }}
+                    onDragLeave={() => setIsDraggingSol(false)}
+                    onDrop={handleSolDrop}
+                    onClick={() => solInputRef.current?.click()}
+                    className={`p-4 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all min-h-[120px] flex flex-col items-center justify-center ${
+                      isDraggingSol
+                        ? 'border-primary-cyan bg-primary-cyan/10'
+                        : selectedSolFile
+                        ? 'border-status-approved/50 bg-status-approved/5'
+                        : 'border-border-active bg-surface-2 hover:border-primary-cyan/50 hover:bg-surface-3'
+                    }`}
+                  >
+                    <input
+                      ref={solInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={handleSolChange}
+                      className="hidden"
+                    />
+
+                    {selectedSolFile ? (
+                      <div className="space-y-1 text-center">
+                        <div className="w-8 h-8 rounded-full bg-status-approved/20 text-status-approved flex items-center justify-center mx-auto">
+                          <Check size={16} />
+                        </div>
+                        <div className="font-semibold text-xs text-[#f1f5f9] max-w-[200px] truncate mx-auto">
+                          {selectedSolFile.name}
+                        </div>
+                        <div className="text-[10px] font-mono text-[#94a3b8]">
+                          {(selectedSolFile.size / 1024).toFixed(1)} KB
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <FileText size={20} className="mx-auto text-[#94a3b8]" />
+                        <div className="text-xs font-medium text-[#f1f5f9]">Select Solutions Paper</div>
+                        <div className="text-[10px] text-[#64748b]">e.g. Solutions.pdf (optional)</div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
-              {/* Metadata Settings */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">Junior College</label>
-                  <select
-                    value={school}
-                    onChange={(e) => setSchool(e.target.value as SingaporeSchoolCode)}
-                    className="w-full bg-surface-2 border border-border-subdued rounded px-2.5 py-1.5 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none"
-                  >
-                    {Object.keys(SINGAPORE_SCHOOLS).map((code) => (
-                      <option key={code} value={code}>
-                        {code} - {SINGAPORE_SCHOOLS[code as SingaporeSchoolCode].name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">Exam Year</label>
-                  <input
-                    type="number"
-                    value={year}
-                    onChange={(e) => setYear(parseInt(e.target.value, 10))}
-                    min={2018}
-                    max={2026}
-                    className="w-full bg-surface-2 border border-border-subdued rounded px-2.5 py-1.5 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">Subject</label>
-                  <select
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="w-full bg-surface-2 border border-border-subdued rounded px-2.5 py-1.5 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none"
-                  >
-                    <option value="mathematics">H2 Mathematics (9758)</option>
-                    <option value="chemistry">H2 Chemistry (9476)</option>
-                    <option value="physics">H2 Physics (9749)</option>
-                    <option value="biology">H2 Biology (9744)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">Paper Number</label>
-                  <select
-                    value={paperNumber}
-                    onChange={(e) => setPaperNumber(parseInt(e.target.value, 10))}
-                    className="w-full bg-surface-2 border border-border-subdued rounded px-2.5 py-1.5 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none font-mono"
-                  >
-                    <option value={1}>Paper 1</option>
-                    <option value={2}>Paper 2</option>
-                    <option value={3}>Paper 3</option>
-                    <option value={4}>Paper 4</option>
-                  </select>
-                </div>
+              {/* Optional Custom Paper Title */}
+              <div>
+                <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">
+                  Custom Paper Title / Set Name <span className="text-[#64748b]">(Optional — auto-detected if left empty)</span>
+                </label>
+                <input
+                  type="text"
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="e.g. Promo Practice Paper 3 [JPJC 2022] or EJC + DHS Promo Set"
+                  className="w-full bg-surface-2 border border-border-subdued rounded px-3 py-2 text-xs text-[#f1f5f9] focus:border-primary-cyan focus:outline-none"
+                />
               </div>
 
               {/* Ingestion Telemetry & Logs */}
@@ -503,11 +525,11 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                 </button>
                 <button
                   type="submit"
-                  disabled={!selectedFile || isIngesting}
+                  disabled={!selectedQpFile || isIngesting}
                   className="flex items-center gap-1.5 px-4 py-2 rounded bg-primary-cyan hover:bg-primary-cyan/90 text-surface-0 font-semibold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-primary-cyan/20"
                 >
                   <Upload size={14} />
-                  <span>Upload & Ingest Examination Paper</span>
+                  <span>Upload & Ingest Paper & Solutions</span>
                 </button>
               </div>
             </form>
