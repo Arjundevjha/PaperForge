@@ -27,7 +27,15 @@
     - Resolved private type leaks across all frontend components by exporting prop interfaces.
     - Configured `.fallowrc.json` with workspace patterns and repository pattern support.
     - Verified **0 dead-code issues across 35 entry points in 0.04s**.
-  - **Testing & Verification**: Created 22 comprehensive unit and end-to-end integration tests covering question marker parsing, parent-child hierarchy building, multi-signal deduplication, syllabus classification, Cambridge A4 PDF generation, worksheet manifest invariant verification, and user management RBAC. **All 22 tests pass 100% in ~240ms**.
+  - **Production Simulation Environment (Sample Data Removed)**:
+    - Defaulted dev and production environments to start completely clean with **0 sources, 0 questions, 0 worksheets, and 0 review items** to accurately simulate a fresh production deployment.
+    - Automated unit and integration test suite explicitly passes `LOAD_SAMPLE_DATA=true` to verify engine invariants independently.
+    - Added clean, responsive empty states to `SourcesConsole`, `QuestionBankMatrix`, and `TeacherResourceHub` guiding tutors when no papers are ingested yet.
+  - **Real Examination Papers Provided by User**:
+    - Received real examination Question Papers and matching Solutions:
+      - `Promo Practise Paper 3.pdf` & `Promo Practise Paper 3 Solutions.pdf`
+      - `Promo Practise Paper 4.pdf` & `Promo Practise Paper 4 Solutions.pdf`
+  - **Testing & Verification**: Created 22 comprehensive unit and end-to-end integration tests covering question marker parsing, parent-child hierarchy building, multi-signal deduplication, syllabus classification, Cambridge A4 PDF generation, worksheet manifest invariant verification, and user management RBAC. **All 22 tests pass 100% in ~250ms**.
   - **Production Build**: Verified clean compilation of all 14 Next.js static and dynamic routes (`npm run build`) in Turbopack with zero errors.
   - **Git Hygiene**: Maintained granular, intermediate commits on the local `main` branch. **Per strict user instructions, NO remote repository was created and NO code was pushed.**
 
