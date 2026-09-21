@@ -354,7 +354,16 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
 
             {/* Questions List */}
             <div className="mt-5 space-y-6">
-              {worksheetQuestions.map((q, idx) => {
+              {worksheetQuestions.length === 0 ? (
+                <div className="py-20 text-center text-[#64748b] font-sans text-xs space-y-2">
+                  <FileText size={32} className="mx-auto text-[#94a3b8] mb-1" />
+                  <div className="font-semibold text-[#1f2937] text-sm">No Worksheet Generated Yet</div>
+                  <p className="text-[11px] text-[#6b7280] max-w-xs mx-auto">
+                    Production Simulation Mode: Ingest an examination paper in Sources to extract questions and assemble Cambridge worksheets.
+                  </p>
+                </div>
+              ) : (
+                worksheetQuestions.map((q, idx) => {
                 const ans = answers.find((a) => a.questionId === q.id);
                 return (
                   <div key={q.id} className="text-[12px] font-serif leading-relaxed text-black">
@@ -388,7 +397,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
 
             {/* Red Dashed Cambridge Page Boundary Marker */}

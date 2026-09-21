@@ -104,7 +104,16 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
 
         {/* Table Rows */}
         <div className="flex-1 overflow-y-auto divide-y divide-border-subdued">
-          {filtered.map((q) => {
+          {filtered.length === 0 ? (
+            <div className="p-12 text-center text-xs text-[#94a3b8] space-y-2">
+              <FileText size={28} className="mx-auto text-[#64748b]" />
+              <div className="font-semibold text-[#f1f5f9]">Question Bank is Empty</div>
+              <p className="text-[11px] text-[#64748b]">
+                No questions found. Ingest an examination paper in Sources to populate the question bank.
+              </p>
+            </div>
+          ) : (
+            filtered.map((q) => {
             const isSelected = q.id === selectedQuestion?.id;
             return (
               <div
@@ -154,7 +163,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
                 </div>
               </div>
             );
-          })}
+          }))}
         </div>
       </div>
 

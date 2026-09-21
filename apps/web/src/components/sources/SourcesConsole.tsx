@@ -59,7 +59,18 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subdued font-mono">
-            {sources.map((s) => {
+            {sources.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-12 text-center text-xs font-sans text-[#94a3b8]">
+                  <FileArchive size={28} className="mx-auto text-[#64748b] mb-2" />
+                  <div className="font-semibold text-[#f1f5f9]">No Examination Papers Ingested Yet</div>
+                  <p className="mt-1 text-[11px] text-[#64748b]">
+                    Production simulation mode: 0 source documents. Click &quot;Upload Source Paper&quot; above to ingest a paper.
+                  </p>
+                </td>
+              </tr>
+            ) : (
+              sources.map((s) => {
               const isReprocessing = reprocessingId === s.id;
               return (
                 <tr key={s.id} className="hover:bg-surface-2/50 transition-colors">
@@ -96,7 +107,7 @@ export const SourcesConsole: React.FC<SourcesConsoleProps> = ({ sources: initial
                   </td>
                 </tr>
               );
-            })}
+            }))}
           </tbody>
         </table>
       </div>

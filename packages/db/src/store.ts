@@ -26,17 +26,40 @@ export class PaperForgeDataStore {
   private reviewItems: Map<string, ReviewItem> = new Map();
   private users: Map<string, UserProfile> = new Map();
 
-  constructor(seedData?: SeedDatabaseData) {
-    const data = seedData || generateSeedData();
+  constructor(seedData?: SeedDatabaseData | null) {
+    // In dev and prod, default to clean/empty state (0 samples) to simulate a fresh production environment.
+    // Seed data is loaded only if explicitly passed or if LOAD_SAMPLE_DATA=true.
+    const shouldLoad =
+      seedData !== undefined ? !!seedData : process.env.LOAD_SAMPLE_DATA === 'true';
+    const data = seedData || (shouldLoad ? generateSeedData() : null);
 
+    if (data) {
+      for (const s of data.sources) this.sources.set(s.id, s);
+      for (const q of data.questions) this.questions.set(q.id, q);
+      for (const a of data.answers) this.answers.set(a.questionId, a);
+      for (const w of data.worksheets) this.worksheets.set(w.id, w);
+      for (const r of data.reviewItems) this.reviewItems.set(r.id, r);
+    }
+
+    this.users.set(DEFAULT_ADMIN_PROFILE.id, DEFAULT_ADMIN_PROFILE);
+    this.users.set(DEFAULT_TEACHER_PROFILE.id, DEFAULT_TEACHER_PROFILE);
+  }
+
+  clearAllData(): void {
+    this.sources.clear();
+    this.questions.clear();
+    this.answers.clear();
+    this.worksheets.clear();
+    this.reviewItems.clear();
+  }
+
+  loadSampleSeed(): void {
+    const data = generateSeedData();
     for (const s of data.sources) this.sources.set(s.id, s);
     for (const q of data.questions) this.questions.set(q.id, q);
     for (const a of data.answers) this.answers.set(a.questionId, a);
     for (const w of data.worksheets) this.worksheets.set(w.id, w);
     for (const r of data.reviewItems) this.reviewItems.set(r.id, r);
-
-    this.users.set(DEFAULT_ADMIN_PROFILE.id, DEFAULT_ADMIN_PROFILE);
-    this.users.set(DEFAULT_TEACHER_PROFILE.id, DEFAULT_TEACHER_PROFILE);
   }
 
   // Sources
@@ -103,6 +126,16 @@ export class PaperForgeDataStore {
 
   getQuestionById(id: string): Question | undefined {
     return this.questions.get(id);
+  }
+
+  addQuestion(question: Question): Question {
+    this.questions.set(question.id, question);
+    return question;
+  }
+
+  addAnswer(answer: Answer): Answer {
+    this.answers.set(answer.questionId, answer);
+    return answer;
   }
 
   getAnswerByQuestionId(questionId: string): Answer | undefined {
