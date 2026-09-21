@@ -62,6 +62,7 @@ export default function HomePage() {
           worksheets={worksheets}
           questions={questions}
           answers={answers}
+          onRefresh={fetchHubData}
         />
       )}
     </AppShell>

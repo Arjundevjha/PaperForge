@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   }
 
   const store = getGlobalStore();
+  (store as any).reloadFromDisk?.();
   const questions = store.listQuestions({
     subject: parsedSubject?.data,
     school: parsedSchool?.data,

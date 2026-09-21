@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { getGlobalStore } from '../packages/db/src/store.ts';
+import { PaperForgeDataStore } from '../packages/db/src/store.ts';
 import { classifyQuestionContent } from '../packages/classification/src/matcher.ts';
 import { classifyQuestionPair } from '../packages/dedup/src/classifier.ts';
 import {
@@ -10,7 +10,7 @@ import {
 } from '../packages/worksheets/src/engine.ts';
 
 test('End-to-End Examination Pipeline: Ingestion -> Classification -> Dedup -> Manifest -> Cambridge PDF Assembly', async () => {
-  const store = getGlobalStore();
+  const store = new PaperForgeDataStore();
 
   // 1. Ingestion: Verify source papers exist
   const sources = store.listSources();

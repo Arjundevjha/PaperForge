@@ -80,12 +80,20 @@ export class PaperForgeDataStore {
     }
   }
 
-  private loadFromDisk(): boolean {
+  public reloadFromDisk(): boolean {
+    if (!this.persistenceFile) {
+      this.persistenceFile = resolvePersistenceFilePath();
+    }
     if (!this.persistenceFile || !fs.existsSync(this.persistenceFile)) return false;
     try {
       const raw = fs.readFileSync(this.persistenceFile, 'utf-8');
       if (!raw.trim()) return false;
       const data = JSON.parse(raw);
+      this.sources.clear();
+      this.questions.clear();
+      this.answers.clear();
+      this.worksheets.clear();
+      this.reviewItems.clear();
       if (Array.isArray(data.sources)) {
         for (const s of data.sources) this.sources.set(s.id, s);
       }
@@ -105,6 +113,10 @@ export class PaperForgeDataStore {
     } catch {
       return false;
     }
+  }
+
+  private loadFromDisk(): boolean {
+    return this.reloadFromDisk();
   }
 
   clearAllData(): void {
@@ -247,6 +259,17 @@ export class PaperForgeDataStore {
     this.worksheets.set(worksheet.id, worksheet);
     this.saveToDisk();
     return worksheet;
+  }
+
+  deleteWorksheet(id: string): boolean {
+    const deleted = this.worksheets.delete(id);
+    if (deleted) this.saveToDisk();
+    return deleted;
+  }
+
+  clearWorksheets(): void {
+    this.worksheets.clear();
+    this.saveToDisk();
   }
 
   getWorksheetQuestions(worksheetId: string): { questions: Question[]; answers: Answer[] } {

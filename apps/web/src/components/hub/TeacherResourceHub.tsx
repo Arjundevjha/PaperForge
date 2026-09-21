@@ -30,6 +30,19 @@ export interface TeacherResourceHubProps {
   worksheets: Worksheet[];
   questions: Question[];
   answers: Answer[];
+  onRefresh?: () => void;
+}
+
+function cleanQuestionStem(text: string, qnum?: string): string {
+  if (!text) return '';
+  let cleaned = text.trim();
+  if (qnum) {
+    const regex = new RegExp(`^(?:Question\\s*)?${qnum}[.:\\s]+`, 'i');
+    cleaned = cleaned.replace(regex, '');
+  } else {
+    cleaned = cleaned.replace(/^(?:Question\s*)?\d+[.:\s]+/i, '');
+  }
+  return cleaned.trim();
 }
 
 export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
@@ -37,34 +50,67 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
   worksheets,
   questions,
   answers,
+  onRefresh,
 }) => {
   const currentSyllabus = SINGAPORE_A_LEVEL_SYLLABI[activeSubject];
   const currentMeta = SUBJECT_METADATA[activeSubject];
 
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all');
   const [selectedWorksheetId, setSelectedWorksheetId] = useState<string>(
-    worksheets[0]?.id || 'ws_chem_01'
+    worksheets[0]?.id || ''
   );
   const [showMarkingScheme, setShowMarkingScheme] = useState<boolean>(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
+  const [generating, setGenerating] = useState<boolean>(false);
+
+  const selectedChapter = currentSyllabus.chapters.find((c) => c.id === selectedChapterId);
 
   // Filter worksheets by chapter
   const filteredWorksheets = worksheets.filter((ws) => {
     if (ws.subject !== activeSubject) return false;
     if (selectedChapterId === 'all') return true;
-    const ch = currentSyllabus.chapters.find((c) => c.id === selectedChapterId);
-    return ch ? ws.chapter.trim().toLowerCase() === ch.name.trim().toLowerCase() : true;
+    return selectedChapter
+      ? ws.chapter.trim().toLowerCase() === selectedChapter.name.trim().toLowerCase()
+      : true;
   });
 
   const activeWorksheet =
-    worksheets.find((w) => w.id === selectedWorksheetId) || filteredWorksheets[0] || worksheets[0];
+    filteredWorksheets.find((w) => w.id === selectedWorksheetId) || filteredWorksheets[0] || null;
 
   // Questions for preview
   const worksheetQuestions = activeWorksheet?.manifest?.questions
-    ? activeWorksheet.manifest.questions
+    ? (activeWorksheet.manifest.questions
         .map((qid) => questions.find((q) => q.id === qid))
-        .filter(Boolean) as Question[]
-    : questions.filter((q) => q.subject === activeSubject).slice(0, 3);
+        .filter(Boolean) as Question[])
+    : [];
+
+  const handleGenerateForChapter = async (chapterName: string) => {
+    try {
+      setGenerating(true);
+      const res = await fetch('/api/worksheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: activeSubject,
+          chapter: chapterName,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data?.id) {
+          setSelectedWorksheetId(json.data.id);
+        }
+        if (onRefresh) onRefresh();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to generate worksheet');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handlePrint = () => {
     window.print();
@@ -150,8 +196,27 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
         {/* Scrollable Feed of Chapter Worksheet Cards */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {filteredWorksheets.length === 0 ? (
-            <div className="p-8 text-center bg-surface-2 rounded-lg border border-border-subdued text-xs text-[#64748b]">
-              No worksheets found for this chapter filter. Select &apos;All Chapters&apos; above.
+            <div className="p-8 text-center bg-surface-2 rounded-lg border border-border-subdued text-xs space-y-3">
+              <p className="text-[#94a3b8]">
+                {selectedChapter
+                  ? `No compiled worksheets found for "${selectedChapter.name}".`
+                  : 'No worksheets found for this selection.'}
+              </p>
+              {selectedChapter && (
+                <button
+                  type="button"
+                  disabled={generating}
+                  onClick={() => handleGenerateForChapter(selectedChapter.name)}
+                  className="px-4 py-2 rounded bg-primary-cyan hover:bg-primary-hover text-[#090e18] font-semibold text-xs shadow-cyan-glow transition-all disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  <Sparkles size={14} />
+                  <span>
+                    {generating
+                      ? 'Compiling Official Worksheet...'
+                      : `Compile "${selectedChapter.name}" Worksheet`}
+                  </span>
+                </button>
+              )}
             </div>
           ) : (
             filteredWorksheets.map((ws) => {
@@ -354,50 +419,56 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
 
             {/* Questions List */}
             <div className="mt-5 space-y-6">
-              {worksheetQuestions.length === 0 ? (
+              {!activeWorksheet || worksheetQuestions.length === 0 ? (
                 <div className="py-20 text-center text-[#64748b] font-sans text-xs space-y-2">
                   <FileText size={32} className="mx-auto text-[#94a3b8] mb-1" />
-                  <div className="font-semibold text-[#1f2937] text-sm">No Worksheet Generated Yet</div>
+                  <div className="font-semibold text-[#1f2937] text-sm">No Worksheet Selected</div>
                   <p className="text-[11px] text-[#6b7280] max-w-xs mx-auto">
-                    Production Simulation Mode: Ingest an examination paper in Sources to extract questions and assemble Cambridge worksheets.
+                    Select an official worksheet from the list on the left to preview in authentic Cambridge A4 format.
                   </p>
                 </div>
               ) : (
                 worksheetQuestions.map((q, idx) => {
-                const ans = answers.find((a) => a.questionId === q.id);
-                return (
-                  <div key={q.id} className="text-[12px] font-serif leading-relaxed text-black">
-                    <div className="flex justify-between items-start font-bold font-sans text-[11px] mb-1">
-                      <span>{q.questionNumber}.</span>
-                      {q.marks && <span className="font-mono">[{q.marks} marks]</span>}
-                    </div>
-
-                    <p className="font-serif text-[12px] text-justify text-[#111827] pl-2">
-                      {q.textContent}
-                    </p>
-
-                    {/* Marking Scheme Overlay if enabled */}
-                    {showMarkingScheme && ans && (
-                      <div className="mt-2 p-2.5 bg-[#f0fdf4] border border-[#86efac] rounded text-[11px] font-sans text-[#166534]">
-                        <div className="font-bold text-[10px] uppercase font-mono tracking-wide text-[#15803d]">
-                          Official Mark Scheme:
+                  const ans = answers.find((a) => a.questionId === q.id);
+                  return (
+                    <div key={q.id} className="text-[12px] font-serif leading-relaxed text-black">
+                      <div className="flex justify-between items-start font-bold font-sans text-[11px] mb-1.5 pb-1 border-b border-black/10">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[12px] font-bold">{idx + 1}.</span>
+                          <span className="font-sans font-medium text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
+                            {q.chapter}{q.subtopic ? ` • ${q.subtopic}` : ''}
+                          </span>
                         </div>
-                        <p className="mt-0.5 text-black">{ans.answerContent}</p>
-                        {ans.markSchemeNotes && (
-                          <div className="mt-1 text-[10px] italic text-[#14532d]">
-                            Guide: {ans.markSchemeNotes}
-                          </div>
-                        )}
+                        {q.marks && <span className="font-mono text-slate-800">[{q.marks} marks]</span>}
                       </div>
-                    )}
 
-                    {/* Monospace Citation Footnote */}
-                    <div className="mt-1.5 pl-2 text-[9px] font-mono text-[#6b7280]">
-                      CITATION: {q.provenance.citation}
+                      <div className="font-serif text-[12px] text-justify text-[#111827] pl-1 whitespace-pre-line leading-relaxed">
+                        {cleanQuestionStem(q.textContent, q.questionNumber)}
+                      </div>
+
+                      {/* Marking Scheme Overlay if enabled */}
+                      {showMarkingScheme && ans && (
+                        <div className="mt-2.5 p-2.5 bg-[#f0fdf4] border border-[#86efac] rounded text-[11px] font-sans text-[#166534]">
+                          <div className="font-bold text-[10px] uppercase font-mono tracking-wide text-[#15803d]">
+                            Official Mark Scheme & Steps:
+                          </div>
+                          <p className="mt-1 text-black whitespace-pre-line leading-relaxed">{ans.answerContent}</p>
+                          {ans.markSchemeNotes && (
+                            <div className="mt-1.5 text-[10px] italic text-[#14532d] border-t border-[#bbf7d0] pt-1">
+                              Examiner Notes: {ans.markSchemeNotes}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Monospace Citation Footnote */}
+                      <div className="mt-1.5 pl-1 text-[9px] font-mono text-[#6b7280]">
+                        CITATION: {q.provenance.citation}
+                      </div>
                     </div>
-                  </div>
-                );
-              }))}
+                  );
+                })
+              )}
             </div>
 
             {/* Red Dashed Cambridge Page Boundary Marker */}

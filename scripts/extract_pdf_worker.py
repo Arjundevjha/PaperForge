@@ -150,10 +150,10 @@ def extract_questions_from_pdf(doc):
     for idx, m in enumerate(markers):
         qnum = m['qnum']
         start_page = m['page']
-        start_y = m['y0'] - 5
+        start_y = m['y0'] - 2
         
         end_page = markers[idx + 1]['page'] if idx + 1 < len(markers) else (ans_page if ans_page is not None else len(doc) - 1)
-        end_y = markers[idx + 1]['y0'] if idx + 1 < len(markers) else (ans_y if ans_y is not None else 9999.0)
+        end_y = markers[idx + 1]['y0'] - 2 if idx + 1 < len(markers) else (ans_y if ans_y is not None else 9999.0)
         
         q_text_parts = []
         has_diagram = False
@@ -162,28 +162,66 @@ def extract_questions_from_pdf(doc):
             if ans_page is not None and p > ans_page:
                 continue
             page = doc[p]
-            for b in page.get_text('blocks'):
-                bx0, by0, bx1, by1, btext = b[0], b[1], b[2], b[3], b[4]
-                if p == start_page and by1 < start_y:
+            page_dict = page.get_text('dict')
+            for block in page_dict.get('blocks', []):
+                if 'lines' not in block:
                     continue
-                if p == end_page:
-                    if idx + 1 < len(markers) and by0 >= end_y - 15:
+                for line in block['lines']:
+                    ly0 = line['bbox'][1]
+                    ly1 = line['bbox'][3]
+                    
+                    if p == start_page and ly1 < start_y:
                         continue
-                    if idx + 1 == len(markers) and ans_y is not None and by0 >= ans_y - 5:
+                    if p == end_page:
+                        if idx + 1 < len(markers) and ly0 >= end_y:
+                            continue
+                        if idx + 1 == len(markers) and ans_y is not None and ly0 >= ans_y - 2:
+                            continue
+                    
+                    line_str = ' '.join(s['text'] for s in line.get('spans', [])).strip()
+                    if not line_str:
                         continue
-                if re.match(r'^\s*Answers\s*$', btext.strip(), re.IGNORECASE) and (ans_page is not None and p >= ans_page):
-                    continue
-                q_text_parts.append(btext.strip())
+                    
+                    # Stop if next question marker is encountered in text stream
+                    if idx + 1 < len(markers):
+                        next_qnum = markers[idx + 1]['qnum']
+                        if re.match(rf'^(?:Question\s*)?{next_qnum}(?:[\.\:\s]|\([a-z]\))', line_str, re.IGNORECASE):
+                            continue
+                    
+                    if re.match(r'^\s*Answers\s*$', line_str, re.IGNORECASE) and (ans_page is not None and p >= ans_page):
+                        continue
+                        
+                    q_text_parts.append(line_str)
                 
             if len(page.get_images()) > 0 or len(page.get_drawings()) > 8:
                 has_diagram = True
                 
-        full_q_text = '\n'.join(q_text_parts).strip()
-        marks = extract_marks(full_q_text)
+        raw_q_text = '\n'.join(q_text_parts).strip()
+        # Clean mathematical glyphs and corruption
+        cleaned_text = (
+            raw_q_text
+            .replace('\uf0f2', 'integral ')
+            .replace('\uf0f3', 'integral ')
+            .replace('\uf0f4', 'integral ')
+            .replace('\uf0f5', 'integral ')
+            .replace('', 'integral ')
+            .replace('', '')
+            .replace('', '')
+            .replace('', '<=')
+            .replace('\uf0a3', '<=')
+            .replace('', '>=')
+            .replace('\uf0b3', '>=')
+            .replace('−', '-')
+            .replace('', '*')
+            .replace('\uf0b4', '*')
+            .replace('\u2212', '-')
+        )
+        
+        marks = extract_marks(cleaned_text)
         
         questions.append({
             'num': str(qnum),
-            'text': full_q_text,
+            'text': cleaned_text,
             'page': start_page + 1,
             'has_diagram': has_diagram,
             'bbox': [56.7, max(50.0, start_y), 538.5, min(750.0, start_y + 250)],
