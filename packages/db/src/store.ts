@@ -162,6 +162,11 @@ export class PaperForgeDataStore {
     return this.worksheets.get(id);
   }
 
+  addWorksheet(worksheet: Worksheet): Worksheet {
+    this.worksheets.set(worksheet.id, worksheet);
+    return worksheet;
+  }
+
   getWorksheetQuestions(worksheetId: string): { questions: Question[]; answers: Answer[] } {
     const ws = this.worksheets.get(worksheetId);
     if (!ws) return { questions: [], answers: [] };

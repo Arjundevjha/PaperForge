@@ -44,6 +44,38 @@ const MARGIN_LEFT = 54; // ~19mm
 const MARGIN_RIGHT = 54;
 const CONTENT_WIDTH = A4_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 
+export function sanitizeForPdf(input: string): string {
+  if (!input) return '';
+  return input
+    .replace(/[\u2212\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+    .replace(/[\u2264\uf0a3]/g, '<=')
+    .replace(/[\u2265\uf0b3]/g, '>=')
+    .replace(/[\u2260]/g, '!=')
+    .replace(/[\u00b1]/g, '+/-')
+    .replace(/[\u00d7\uf0b4]/g, '*')
+    .replace(/[\u00f7]/g, '/')
+    .replace(/[\u00b0]/g, ' deg')
+    .replace(/[\u2022\u2023\u25e6]/g, '*')
+    .replace(/[\u2026]/g, '...')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u03b8\uf071]/g, 'theta')
+    .replace(/[\u03bb\uf06c]/g, 'lambda')
+    .replace(/[\u03bc\uf06d]/g, 'mu')
+    .replace(/[\u03b1\uf061]/g, 'alpha')
+    .replace(/[\u03b2\uf062]/g, 'beta')
+    .replace(/[\u03c0\uf070]/g, 'pi')
+    .replace(/[\u221a]/g, 'sqrt')
+    .replace(/[\u222b\uf0f2\uf0f3\uf0f4\uf0f5]/g, 'integral ')
+    .replace(/[\uf0a5]/g, 'inf')
+    .replace(/[\uf0ce]/g, 'in')
+    .replace(/[\uf0d0]/g, 'angle ')
+    .replace(/[\uf0e6\uf0e7\uf0e8]/g, '(')
+    .replace(/[\uf0f6\uf0f7\uf0f8]/g, ')')
+    .replace(/[\ue000-\uf8ff]/g, '')
+    .replace(/[^\x20-\x7E\t\n]/g, '');
+}
+
 export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const fontRegular = await doc.embedFont(StandardFonts.TimesRoman);
@@ -92,7 +124,7 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
   });
 
   y -= 16;
-  page.drawText(`Chapter: ${options.chapterTitle} [${options.worksheetNumber}]`, {
+  page.drawText(sanitizeForPdf(`Chapter: ${options.chapterTitle} [${options.worksheetNumber}]`), {
     x: MARGIN_LEFT,
     y,
     size: 11,
@@ -144,7 +176,6 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
 
     // Check if new page needed
     if (y < 120) {
-      // Footer on current page
       page.drawText('[Turn Over', {
         x: A4_WIDTH - MARGIN_RIGHT - 60,
         y: 35,
@@ -181,7 +212,8 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
     y -= 14;
 
     // Text content lines (wrap lines)
-    const words = q.textContent.split(/\s+/);
+    const sanitizedText = sanitizeForPdf(q.textContent);
+    const words = sanitizedText.split(/\s+/).filter(Boolean);
     let line = '';
     const lineHeight = 14;
 
@@ -222,7 +254,7 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
 
     // Citation tag
     y -= 4;
-    page.drawText(`CITATION: ${q.citation}`, {
+    page.drawText(sanitizeForPdf(`CITATION: ${q.citation}`), {
       x: MARGIN_LEFT + 15,
       y,
       size: 8,
@@ -291,7 +323,7 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
   });
 
   y -= 22;
-  page.drawText(`${meta.name.toUpperCase()} • ${options.chapterTitle} [${options.worksheetNumber}]`, {
+  page.drawText(sanitizeForPdf(`${meta.name.toUpperCase()} • ${options.chapterTitle} [${options.worksheetNumber}]`), {
     x: MARGIN_LEFT,
     y,
     size: 12,
@@ -348,22 +380,52 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
 
     y -= 14;
 
-    // Answer Content
-    const lines = a.answerContent.split('\n');
-    for (const l of lines) {
-      page.drawText(l, {
-        x: MARGIN_LEFT + 15,
-        y,
-        size: 9.5,
-        font: fontRegular,
-        color: rgb(0.1, 0.1, 0.1),
-      });
-      y -= 13;
+    // Answer Content wrapped lines
+    const sanitizedAnswer = sanitizeForPdf(a.answerContent);
+    const rawLines = sanitizedAnswer.split('\n');
+    for (const rawLine of rawLines) {
+      const words = rawLine.split(/\s+/).filter(Boolean);
+      let line = '';
+      for (const word of words) {
+        const testLine = line ? `${line} ${word}` : word;
+        const width = fontRegular.widthOfTextAtSize(testLine, 9.5);
+        if (width > CONTENT_WIDTH - 30) {
+          page.drawText(line, {
+            x: MARGIN_LEFT + 15,
+            y,
+            size: 9.5,
+            font: fontRegular,
+            color: rgb(0.1, 0.1, 0.1),
+          });
+          line = word;
+          y -= 13;
+          if (y < 90) {
+            page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
+            y = A4_HEIGHT - 60;
+          }
+        } else {
+          line = testLine;
+        }
+      }
+      if (line) {
+        page.drawText(line, {
+          x: MARGIN_LEFT + 15,
+          y,
+          size: 9.5,
+          font: fontRegular,
+          color: rgb(0.1, 0.1, 0.1),
+        });
+        y -= 13;
+        if (y < 90) {
+          page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
+          y = A4_HEIGHT - 60;
+        }
+      }
     }
 
     if (a.markSchemeNotes) {
       y -= 3;
-      page.drawText(`Marking Guide: ${a.markSchemeNotes}`, {
+      page.drawText(sanitizeForPdf(`Marking Guide: ${a.markSchemeNotes}`), {
         x: MARGIN_LEFT + 15,
         y,
         size: 8.5,
@@ -375,7 +437,7 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
 
     // Provenance
     y -= 3;
-    page.drawText(`SOURCE: ${a.citation}`, {
+    page.drawText(sanitizeForPdf(`SOURCE: ${a.citation}`), {
       x: MARGIN_LEFT + 15,
       y,
       size: 8,

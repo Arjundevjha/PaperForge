@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as fs from 'node:fs/promises';
+import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 import {
   getGlobalStore,
@@ -20,6 +21,18 @@ import { hashNormalizedText, computeVisualHash } from '@paperforge/dedup';
 import { classifyQuestionContent } from '@paperforge/classification';
 
 const execFileAsync = promisify(execFile);
+
+function getWorkerScriptPath(): string {
+  let curr = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    const candidate = path.join(curr, 'scripts', 'extract_pdf_worker.py');
+    if (fsSync.existsSync(candidate)) {
+      return candidate;
+    }
+    curr = path.dirname(curr);
+  }
+  return path.resolve(process.cwd(), 'scripts/extract_pdf_worker.py');
+}
 
 export async function GET() {
   const store = getGlobalStore();
@@ -129,7 +142,7 @@ export async function POST(request: Request) {
 
       let extractedJsonText = '';
       try {
-        const workerScript = path.resolve(process.cwd(), 'scripts/extract_pdf_worker.py');
+        const workerScript = getWorkerScriptPath();
         const { stdout } = await execFileAsync('python3', [
           workerScript,
           tempQpPath,
