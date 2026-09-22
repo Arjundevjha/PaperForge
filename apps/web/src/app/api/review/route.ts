@@ -34,7 +34,7 @@ export async function PATCH(request: Request) {
 
     const { id, reviewItemId, decision, reviewerId, notes, resolutionNotes } = parsed.data;
     const targetId = (id || reviewItemId)!;
-    const resolvedReviewer = reviewerId || user.name || user.id;
+    const resolvedReviewer = reviewerId || user?.name || user?.id || 'Administrator';
     const store = getGlobalStore();
     const updated = store.resolveReviewItem(targetId, decision, resolvedReviewer, notes || resolutionNotes);
 

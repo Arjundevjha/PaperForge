@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   FileSpreadsheet,
@@ -17,7 +17,6 @@ import {
   Sparkles,
   LogOut,
   User,
-  Shield,
 } from 'lucide-react';
 import { SubjectId, SUBJECT_METADATA } from '@paperforge/shared';
 import { useAuth } from '../auth/AuthProvider';
@@ -33,16 +32,25 @@ export const AppShell: React.FC<AppShellProps> = ({
   activeSubject,
   onSubjectChange,
 }) => {
+  const router = useRouter();
   const pathname = usePathname();
-  const { user, role, isAdmin, signOut, switchPersona, isSupabaseConfigured } = useAuth();
+  const { user, role, isAdmin, signOut, isLoading } = useAuth();
   const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [pendingReviewCount, setPendingReviewCount] = useState<number>(0);
 
+  // Enforce authentication redirect
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/login');
+    }
+  }, [isLoading, user, router]);
+
   // Dynamically fetch pending review queue count
   useEffect(() => {
+    if (!isAdmin) return;
     const fetchPendingReviews = async () => {
       try {
         const res = await fetch('/api/review?status=PENDING');
@@ -55,7 +63,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       }
     };
     fetchPendingReviews();
-  }, [pathname]);
+  }, [pathname, isAdmin]);
 
   // Global Keyboard Shortcuts (Ctrl+K / Cmd+K and Escape)
   useEffect(() => {
@@ -76,17 +84,36 @@ export const AppShell: React.FC<AppShellProps> = ({
     { label: 'Teacher Resource Hub', href: '/', icon: FileSpreadsheet },
     { label: 'PaperForge Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Question Bank', href: '/questions', icon: Layers },
-    {
-      label: 'Review Queue',
-      href: '/review',
-      icon: CheckSquare,
-      badge: pendingReviewCount > 0 ? String(pendingReviewCount) : undefined,
-    },
-    { label: 'Sources & Ingestion', href: '/sources', icon: FileArchive },
+    ...(isAdmin
+      ? [
+          {
+            label: 'Review Queue',
+            href: '/review',
+            icon: CheckSquare,
+            badge: pendingReviewCount > 0 ? String(pendingReviewCount) : undefined,
+          },
+          { label: 'Sources & Ingestion', href: '/sources', icon: FileArchive },
+        ]
+      : []),
     { label: 'Syllabus Explorer', href: '/syllabus', icon: BookOpen },
   ];
 
   const currentMeta = SUBJECT_METADATA[activeSubject];
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full bg-chassis text-[#dee2f1] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-primary-cyan border-t-transparent animate-spin" />
+          <p className="text-xs font-mono text-[#94a3b8]">Verifying authentication session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen w-full bg-chassis text-[#dee2f1] overflow-hidden">
@@ -282,53 +309,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                     </div>
                   </div>
 
-                  {/* Dev Persona Switcher (only shown when Supabase env is not active) */}
-                  {!isSupabaseConfigured && switchPersona && (
-                    <div className="p-2 bg-surface-1 rounded space-y-1.5 border border-border-subdued">
-                      <div className="text-[10px] font-mono uppercase text-[#94a3b8]">
-                        Dev Role Switcher
-                      </div>
-                      <div className="grid grid-cols-2 gap-1">
-                        <button
-                          onClick={() => {
-                            switchPersona('ADMIN');
-                            setUserMenuOpen(false);
-                          }}
-                          className={`px-2 py-1 rounded text-[11px] font-mono text-center transition-colors ${
-                            role === 'ADMIN'
-                              ? 'bg-status-approved text-black font-bold'
-                              : 'bg-surface-2 text-[#cbd5e1] hover:text-white'
-                          }`}
-                        >
-                          ADMIN
-                        </button>
-                        <button
-                          onClick={() => {
-                            switchPersona('TEACHER');
-                            setUserMenuOpen(false);
-                          }}
-                          className={`px-2 py-1 rounded text-[11px] font-mono text-center transition-colors ${
-                            role === 'TEACHER'
-                              ? 'bg-azure text-black font-bold'
-                              : 'bg-surface-2 text-[#cbd5e1] hover:text-white'
-                          }`}
-                        >
-                          TEACHER
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="pt-1 flex flex-col gap-1">
-                    <Link
-                      href="/login"
-                      onClick={() => setUserMenuOpen(false)}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-surface-3 text-xs text-[#dee2f1] transition-colors"
-                    >
-                      <Shield size={14} className="text-primary-cyan" />
-                      <span>{isSupabaseConfigured ? 'Account Settings' : 'Supabase Login Screen'}</span>
-                    </Link>
-
                     <button
                       onClick={async () => {
                         await signOut();

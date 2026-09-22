@@ -1,24 +1,33 @@
-import { UserProfile, UserRole, DEFAULT_ADMIN_PROFILE, ALLOWED_ADMIN_EMAIL } from '@paperforge/shared';
+import { UserProfile, UserRole, ALLOWED_ADMIN_EMAIL } from '@paperforge/shared';
 import { createServerSupabaseClient } from './supabase/server';
 
-export async function getCurrentUser(): Promise<UserProfile> {
+/**
+ * Retrieves the currently authenticated Supabase user profile from server cookies.
+ * Returns null if no valid authenticated session exists.
+ * Strictly derives the user role: ADMIN if matching admin email, otherwise assigned role.
+ */
+export async function getCurrentUser(): Promise<UserProfile | null> {
   const supabase = await createServerSupabaseClient();
 
   if (!supabase) {
-    // In-memory / development fallback mode
-    return DEFAULT_ADMIN_PROFILE;
+    return null;
   }
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
     if (error || !user) {
-      return DEFAULT_ADMIN_PROFILE;
+      return null;
     }
 
-    // Strict email check: only ALLOWED_ADMIN_EMAIL is authorized
-    const isAllowedAdmin = user.email?.toLowerCase() === ALLOWED_ADMIN_EMAIL.toLowerCase();
-    const role: UserRole = isAllowedAdmin ? 'ADMIN' : 'TEACHER';
+    const adminEmail = (process.env.ADMIN_DEFAULT_EMAIL || ALLOWED_ADMIN_EMAIL).toLowerCase();
+    const isAllowedAdmin = user.email?.toLowerCase() === adminEmail;
+    const role: UserRole = isAllowedAdmin
+      ? 'ADMIN'
+      : ((user.user_metadata?.role as UserRole) || 'TEACHER');
 
     return {
       id: user.id,
@@ -28,6 +37,6 @@ export async function getCurrentUser(): Promise<UserProfile> {
       avatarUrl: user.user_metadata?.avatar_url,
     };
   } catch {
-    return DEFAULT_ADMIN_PROFILE;
+    return null;
   }
 }
