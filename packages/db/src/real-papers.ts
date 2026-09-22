@@ -9,11 +9,12 @@ import {
   Answer,
   SourceDocument,
   ReviewItem,
+  Worksheet,
   formatProvenance,
 } from '@paperforge/shared';
 import { hashNormalizedText, computeVisualHash, classifyQuestionPair } from '@paperforge/dedup';
 import { classifyQuestionContent } from '@paperforge/classification';
-import { PaperForgeDataStore } from './store';
+import type { PaperForgeDataStore } from './store';
 
 export interface IngestedPaperPackage {
   source: SourceDocument;
@@ -515,3 +516,133 @@ export function ingestPaperPackage(
     },
   };
 }
+
+/**
+ * Bootstraps canonical Singapore Junior College examination papers and worksheets.
+ * Used for serverless environments (e.g. Vercel) or fresh initializations to ensure
+ * Teacher Hub, Question Bank, and Worksheets are fully functional out-of-the-box.
+ */
+export function bootstrapCanonicalPapers(store: PaperForgeDataStore): void {
+  if (store.listQuestions().length > 0) return;
+
+  // 1. Ingest JPJC 2022 Paper 1 (13 questions, 102 marks)
+  ingestPaperPackage(store, REAL_PAPER_3_PACKAGE);
+
+  // 2. Ingest EJC 2022 Paper 2 (13 questions, 100 marks)
+  ingestPaperPackage(store, REAL_PAPER_4_PACKAGE);
+
+  // 3. Build 5 canonical worksheets if not present
+  if (store.listWorksheets().length === 0) {
+    const canonicalWorksheets = [
+      {
+        id: 'ws_math_01',
+        worksheetNumber: 'WS-MATH-01',
+        title: 'WS-MATH-01: Functions and Graphs Revision (JPJC & EJC)',
+        chapter: 'Functions and Graphs',
+        questionIds: [
+          'jpjc-2022-p1-q01',
+          'jpjc-2022-p1-q04',
+          'jpjc-2022-p1-q08',
+          'jpjc-2022-p1-q12',
+          'ejc-2022-p2-q01',
+          'ejc-2022-p2-q02',
+          'ejc-2022-p2-q03',
+          'ejc-2022-p2-q05',
+          'ejc-2022-p2-q06',
+          'ejc-2022-p2-q11',
+        ],
+      },
+      {
+        id: 'ws_math_02',
+        worksheetNumber: 'WS-MATH-02',
+        title: 'WS-MATH-02: Calculus Revision: Differentiation & Integration (JPJC & EJC)',
+        chapter: 'Calculus',
+        questionIds: [
+          'jpjc-2022-p1-q02',
+          'jpjc-2022-p1-q03',
+          'jpjc-2022-p1-q05',
+          'jpjc-2022-p1-q07',
+          'jpjc-2022-p1-q09',
+          'jpjc-2022-p1-q11',
+          'ejc-2022-p2-q04',
+          'ejc-2022-p2-q07',
+          'ejc-2022-p2-q10',
+          'ejc-2022-p2-q12',
+        ],
+      },
+      {
+        id: 'ws_math_03',
+        worksheetNumber: 'WS-MATH-03',
+        title: 'WS-MATH-03: Sequences and Series: AP/GP (JPJC & EJC)',
+        chapter: 'Sequences and Series',
+        questionIds: ['jpjc-2022-p1-q06', 'ejc-2022-p2-q09'],
+      },
+      {
+        id: 'ws_math_04',
+        worksheetNumber: 'WS-MATH-04',
+        title: 'WS-MATH-04: Vectors: Lines & Planes in 3D (JPJC & EJC)',
+        chapter: 'Vectors',
+        questionIds: [
+          'jpjc-2022-p1-q10',
+          'jpjc-2022-p1-q13',
+          'ejc-2022-p2-q08',
+          'ejc-2022-p2-q13',
+        ],
+      },
+      {
+        id: 'ws_math_05',
+        worksheetNumber: 'WS-MATH-05',
+        title: 'WS-MATH-05: Promotional Examination Practice Paper (All Topics)',
+        chapter: 'Promotional Exam Revision (All Topics)',
+        questionIds: [
+          'jpjc-2022-p1-q01',
+          'jpjc-2022-p1-q02',
+          'jpjc-2022-p1-q03',
+          'jpjc-2022-p1-q04',
+          'jpjc-2022-p1-q05',
+          'jpjc-2022-p1-q06',
+          'jpjc-2022-p1-q07',
+          'jpjc-2022-p1-q08',
+          'jpjc-2022-p1-q09',
+          'jpjc-2022-p1-q10',
+        ],
+      },
+    ];
+
+    for (const def of canonicalWorksheets) {
+      const questions = def.questionIds
+        .map((id) => store.getQuestionById(id))
+        .filter((q): q is Question => Boolean(q));
+
+      const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 0), 0);
+      const schools = Array.from(new Set(questions.map((q) => q.provenance.school)));
+
+      const ws: Worksheet = {
+        id: def.id,
+        worksheetNumber: def.worksheetNumber,
+        title: def.title,
+        subject: 'mathematics',
+        chapter: def.chapter,
+        syllabusVersionId: 'SEAB-9758-Official',
+        version: 1,
+        questionCount: questions.length,
+        totalMarks,
+        status: 'PUBLISHED',
+        sourceCoverage: schools,
+        manifest: {
+          worksheetId: def.id,
+          version: 1,
+          subject: 'mathematics',
+          chapter: def.chapter,
+          questions: def.questionIds,
+          totalMarks,
+          frozenAt: new Date().toISOString(),
+        },
+        generatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      store.addWorksheet(ws);
+    }
+  }
+}
+

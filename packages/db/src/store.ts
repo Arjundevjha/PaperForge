@@ -19,6 +19,7 @@ import {
   DEFAULT_TEACHER_PROFILE,
 } from '@paperforge/shared';
 import { generateSeedData, SeedDatabaseData } from './seed';
+import { bootstrapCanonicalPapers } from './real-papers';
 
 function resolvePersistenceFilePath(): string {
   let curr = process.cwd();
@@ -84,7 +85,12 @@ export class PaperForgeDataStore {
     if (!this.persistenceFile) {
       this.persistenceFile = resolvePersistenceFilePath();
     }
-    if (!this.persistenceFile || !fs.existsSync(this.persistenceFile)) return false;
+    if (!this.persistenceFile || !fs.existsSync(this.persistenceFile)) {
+      if (this.questions.size === 0 && process.env.NODE_ENV !== 'test') {
+        bootstrapCanonicalPapers(this);
+      }
+      return false;
+    }
     try {
       const raw = fs.readFileSync(this.persistenceFile, 'utf-8');
       if (!raw.trim()) return false;
@@ -369,6 +375,9 @@ export function getGlobalStore(): PaperForgeDataStore {
     const store = new PaperForgeDataStore();
     if (process.env.NODE_ENV !== 'test') {
       store.enableDiskPersistence();
+    }
+    if (store.listQuestions().length === 0 && process.env.NODE_ENV !== 'test') {
+      bootstrapCanonicalPapers(store);
     }
     globalForStore.__paperforge_store = store;
   }
