@@ -14,6 +14,19 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/auth');
   const isApiRoute = request.nextUrl.pathname.startsWith('/api');
 
+  const isDev = process.env.NODE_ENV === 'development';
+  const devRole = request.cookies.get('paperforge_dev_role')?.value;
+
+  // In development mode, allow offline testing if dev role cookie is set
+  if (isDev && devRole) {
+    if (request.nextUrl.pathname === '/login') {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = '/';
+      return NextResponse.redirect(redirectUrl);
+    }
+    return supabaseResponse;
+  }
+
   // If Supabase is not configured, block access to all protected pages
   if (!url || !anonKey) {
     if (!isAuthRoute && !isApiRoute) {

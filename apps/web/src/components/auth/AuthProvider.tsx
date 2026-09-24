@@ -36,7 +36,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!supabase) {
       setIsConfigured(false);
-      setUser(null);
+      const devRole = typeof document !== 'undefined'
+        ? document.cookie
+            .split('; ')
+            .find((row) => row.startsWith('paperforge_dev_role='))
+            ?.split('=')[1]
+        : undefined;
+
+      if (devRole) {
+        const adminEmail = (process.env.ADMIN_DEFAULT_EMAIL || ALLOWED_ADMIN_EMAIL).toLowerCase();
+        setUser({
+          id: 'dev-user-01',
+          email: devRole === 'ADMIN' ? adminEmail : 'teacher@paperforge.local',
+          name: devRole === 'ADMIN' ? 'Local Admin (Dev)' : 'Local Teacher (Dev)',
+          role: devRole === 'ADMIN' ? 'ADMIN' : 'TEACHER',
+        });
+      } else {
+        setUser(null);
+      }
       setIsLoading(false);
       return;
     }
@@ -85,6 +102,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const handleSignOut = async () => {
+    if (typeof document !== 'undefined') {
+      document.cookie = 'paperforge_dev_role=; path=/; max-age=0;';
+    }
     const supabase = createClient();
     if (supabase) {
       await supabase.auth.signOut();

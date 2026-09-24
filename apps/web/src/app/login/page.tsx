@@ -132,14 +132,43 @@ function LoginForm() {
 
         {/* Configuration Notice if Supabase not connected */}
         {!isSupabaseConfigured && (
-          <div className="p-3.5 rounded-lg bg-status-error/10 border border-status-error/40 text-xs text-[#fca5a5] space-y-1.5">
-            <div className="flex items-center gap-1.5 text-status-error font-semibold">
+          <div className="p-4 rounded-lg bg-surface-2 border border-border-subdued space-y-3">
+            <div className="flex items-center gap-1.5 text-primary-cyan font-semibold text-xs">
               <ShieldAlert size={15} />
-              <span>Supabase Authentication Required</span>
+              <span>Supabase Not Yet Configured in .env.local</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-[#fecaca]">
-              PaperForge requires live Supabase Auth credentials. Configure <code className="font-mono bg-black/40 px-1 py-0.5 rounded">NEXT_PUBLIC_SUPABASE_URL</code> and <code className="font-mono bg-black/40 px-1 py-0.5 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in your environment variables to sign in.
+            <p className="text-[11px] leading-relaxed text-[#94a3b8]">
+              To connect real cloud authentication, add your credentials to <code className="font-mono bg-black/40 px-1 py-0.5 rounded text-white">apps/web/.env.local</code>.
             </p>
+            <div className="pt-2.5 border-t border-border-subdued space-y-2">
+              <div className="text-[10px] font-mono text-[#64748b] uppercase tracking-wider">
+                Local Offline Development & Testing
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    document.cookie = 'paperforge_dev_role=ADMIN; path=/; max-age=86400; SameSite=Lax';
+                    window.location.href = redirectTo;
+                  }}
+                  className="w-full py-2 px-3 rounded bg-primary-cyan text-[#090e18] text-xs font-semibold hover:bg-primary-hover shadow-cyan-glow transition-all text-center flex items-center justify-center gap-1.5"
+                >
+                  <ShieldCheck size={13} />
+                  <span>Enter as Admin</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    document.cookie = 'paperforge_dev_role=TEACHER; path=/; max-age=86400; SameSite=Lax';
+                    window.location.href = redirectTo;
+                  }}
+                  className="w-full py-2 px-3 rounded bg-surface-3 text-[#f1f5f9] text-xs font-semibold hover:bg-surface-2 border border-border-subdued transition-all text-center flex items-center justify-center gap-1.5"
+                >
+                  <User size={13} />
+                  <span>Enter as Teacher</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
