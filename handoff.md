@@ -24,10 +24,13 @@
      - Built `MathRenderer.tsx` using `katex.renderToString` supporting inline math (`$...$`, `\(...\)`) and display math (`$$...$$`, `\[...\]`).
      - Added KaTeX styles to `globals.css` ensuring Computer Modern mathematical typography across the platform.
      - Implemented `cleanLatexForPdf` to convert LaTeX expressions into clean, human-readable text for standard PDF text layers.
-  4. **Quality Gates & Tests**:
+  4. **Next.js 16 Proxy Migration & Local Dev Mode**:
+     - Migrated `apps/web/src/middleware.ts` to `apps/web/src/proxy.ts` (`export async function proxy`) eliminating the Next.js 16 deprecation warning.
+     - Implemented local offline development mode on `/login`: When `!isSupabaseConfigured`, developers can immediately click "Enter as Admin" or "Enter as Teacher" to test Cambridge worksheets and math rendering without needing cloud Supabase keys.
+  5. **Quality Gates & Tests**:
      - **Fallow Dead-Code Scan**: **0 issues found** across 39 entry points (`0.03s`).
      - **Automated Test Suite**: **31/31 passing unit, e2e, and ingestion tests** (`0.24s`).
-     - **Next.js Turbopack Build**: All 15 routes compiled with zero errors and zero warnings (`0.55s`).
+     - **Next.js Turbopack Build**: All 15 routes compiled with zero errors and zero warnings (`0.43s`).
      - **npm audit**: **0 vulnerabilities**.
 
 ---
@@ -36,6 +39,7 @@
 
 | Package / App | Path | Status | Key Highlights |
 |---|---|---|---|
+| **Next.js Route Guard** | `apps/web/src/proxy.ts` | Active & Tested | Next.js 16 `proxy.ts` route guard enforcing Supabase session & dev offline access |
 | **LaTeX Renderer** | `apps/web/src/components/ui/MathRenderer.tsx` | Active & Tested | KaTeX math renderer for inline & display math with error boundaries |
 | **Teacher Hub** | `apps/web/src/components/hub/TeacherResourceHub.tsx` | Active & Tested | Cambridge A4 preview with KaTeX math, question diagrams, and verbatim mark schemes |
 | **Question Matrix** | `apps/web/src/components/questions/QuestionBankMatrix.tsx` | Active & Tested | Question inspector with KaTeX math rendering and visual diagram previews |
