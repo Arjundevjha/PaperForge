@@ -14,6 +14,7 @@ import {
   SINGAPORE_SCHOOLS,
   SingaporeSchoolCode,
 } from '@paperforge/shared';
+import MathRenderer from '../ui/MathRenderer';
 
 export interface QuestionBankMatrixProps {
   questions: Question[];
@@ -267,13 +268,22 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
             </div>
 
             {/* Stored Text Content */}
-            <div className="p-4 rounded-lg bg-surface-2 border border-border-subdued space-y-2">
+            <div className="p-4 rounded-lg bg-surface-2 border border-border-subdued space-y-3">
               <div className="text-[11px] font-mono uppercase text-[#64748b]">
                 Question Stem (Cambridge Formatted)
               </div>
-              <p className="text-xs text-[#f1f5f9] leading-relaxed font-serif whitespace-pre-wrap">
-                {selectedQuestion.textContent}
-              </p>
+              <div className="text-xs text-[#f1f5f9] leading-relaxed font-serif">
+                <MathRenderer content={selectedQuestion.textContent} />
+              </div>
+              {selectedQuestion.diagramUrl && (
+                <div className="my-2 p-2 bg-surface-1 rounded border border-border-subdued flex justify-center">
+                  <img
+                    src={selectedQuestion.diagramUrl}
+                    alt={`Question ${selectedQuestion.questionNumber} Diagram`}
+                    className="max-h-60 max-w-full object-contain rounded bg-white p-1"
+                  />
+                </div>
+              )}
               {selectedQuestion.marks && (
                 <div className="pt-2 border-t border-border-subdued text-xs font-mono text-[#94a3b8]">
                   Mark Allocation: {selectedQuestion.marks} marks
@@ -283,14 +293,23 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
 
             {/* Answer & Mark Scheme */}
             {activeAnswer ? (
-              <div className="p-4 rounded-lg bg-[#0c1815] border border-status-approved/40 space-y-2">
+              <div className="p-4 rounded-lg bg-[#0c1815] border border-status-approved/40 space-y-3">
                 <div className="text-[11px] font-mono uppercase text-status-approved font-semibold flex items-center gap-1.5">
                   <CheckCircle2 size={13} />
                   <span>Official Verified Mark Scheme</span>
                 </div>
-                <p className="text-xs text-[#dee2f1] leading-relaxed whitespace-pre-wrap">
-                  {activeAnswer.answerContent}
-                </p>
+                <div className="text-xs text-[#dee2f1] leading-relaxed">
+                  <MathRenderer content={activeAnswer.answerContent} />
+                </div>
+                {activeAnswer.diagramUrl && (
+                  <div className="my-2 p-2 bg-[#06100c] rounded border border-status-approved/30 flex justify-center">
+                    <img
+                      src={activeAnswer.diagramUrl}
+                      alt={`Question ${selectedQuestion.questionNumber} Mark Scheme Diagram`}
+                      className="max-h-60 max-w-full object-contain rounded bg-white p-1"
+                    />
+                  </div>
+                )}
                 {activeAnswer.markSchemeNotes && (
                   <div className="text-[11px] italic text-[#86efac]">
                     Notes: {activeAnswer.markSchemeNotes}

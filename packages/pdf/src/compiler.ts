@@ -3,6 +3,8 @@
  * Produces official Singapore-Cambridge GCE A-Level examination worksheets and matching answer keys
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { SubjectId, SUBJECT_METADATA } from '@paperforge/shared';
 
@@ -11,6 +13,7 @@ export interface ExamQuestionInput {
   textContent: string;
   marks?: number | null;
   citation: string;
+  diagramUrl?: string;
 }
 
 export interface ExamPaperOptions {
@@ -27,6 +30,7 @@ export interface AnswerKeyInput {
   markSchemeNotes?: string;
   marks?: number | null;
   citation: string;
+  diagramUrl?: string;
 }
 
 export interface AnswerKeyOptions {
@@ -35,6 +39,74 @@ export interface AnswerKeyOptions {
   subject: SubjectId;
   totalMarks: number;
   answers: AnswerKeyInput[];
+}
+
+function resolveDiagramPath(diagramUrl?: string): string | null {
+  if (!diagramUrl) return null;
+  const cleanPath = diagramUrl.replace(/^\//, '');
+  const candidates = [
+    diagramUrl,
+    path.resolve(process.cwd(), 'apps/web/public', cleanPath),
+    path.resolve(process.cwd(), 'public', cleanPath),
+    path.resolve(__dirname, '../../../apps/web/public', cleanPath),
+    path.resolve(__dirname, '../../apps/web/public', cleanPath),
+    path.resolve(__dirname, '../public', cleanPath),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ c)) {
+      return c;
+    }
+  }
+  return null;
+}
+
+function cleanLatexForPdf(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
+    .replace(/\\left\(|\\right\)/g, (m) => (m.includes('(') ? '(' : ')'))
+    .replace(/\\left\[|\\right\]/g, (m) => (m.includes('[') ? '[' : ']'))
+    .replace(/\\left\\\{|\\right\\\}/g, (m) => (m.includes('{') ? '{' : '}'))
+    .replace(/\\mathrm\{([^}]+)\}/g, '$1')
+    .replace(/\\mathbf\{([^}]+)\}/g, '$1')
+    .replace(/\\text\{([^}]+)\}/g, '$1')
+    .replace(/\\sqrt\{([^}]+)\}/g, 'sqrt($1)')
+    .replace(/\\quad|\\qquad/g, '   ')
+    .replace(/\\,|\\;|\\!/g, ' ')
+    .replace(/\\le\b/g, '<=')
+    .replace(/\\ge\b/g, '>=')
+    .replace(/\\ne\b/g, '!=')
+    .replace(/\\approx\b/g, '~')
+    .replace(/\\times\b/g, '*')
+    .replace(/\\pm\b/g, '+/-')
+    .replace(/\\int\b/g, 'integral ')
+    .replace(/\\infty\b/g, 'inf')
+    .replace(/\\implies\b/g, '=>')
+    .replace(/\\iff\b/g, '<=>')
+    .replace(/\\in\b/g, 'in ')
+    .replace(/\\mathbb\{R\}/g, 'R')
+    .replace(/\\theta\b/g, 'theta')
+    .replace(/\\alpha\b/g, 'alpha')
+    .replace(/\\lambda\b/g, 'lambda')
+    .replace(/\\mu\b/g, 'mu')
+    .replace(/\\pi\b/g, 'pi')
+    .replace(/\\cdot\b/g, '*')
+    .replace(/\\to\b/g, '->')
+    .replace(/\\mapsto\b/g, '|->')
+    .replace(/\\vec\{([^}]+)\}/g, 'vec($1)')
+    .replace(/\\hat\{([^}]+)\}/g, 'hat($1)')
+    .replace(/\\sin\b/g, 'sin')
+    .replace(/\\cos\b/g, 'cos')
+    .replace(/\\tan\b/g, 'tan')
+    .replace(/\\sec\b/g, 'sec')
+    .replace(/\\ln\b/g, 'ln')
+    .replace(/\\begin\{pmatrix\}([\s\S]*?)\\end\{pmatrix\}/g, (_, inner) => {
+      return `[${inner.replace(/\\\\/g, ', ').replace(/\s+/g, ' ').trim()}]`;
+    })
+    .replace(/\$\$/g, '')
+    .replace(/\$/g, '')
+    .replace(/\\\[|\\\]/g, '')
+    .replace(/\\\(|\\\)/g, '');
 }
 
 // A4 dimensions in points: 595.28 x 841.89
@@ -46,7 +118,8 @@ const CONTENT_WIDTH = A4_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 
 export function sanitizeForPdf(input: string): string {
   if (!input) return '';
-  return input
+  const cleaned = cleanLatexForPdf(input);
+  return cleaned
     .replace(/[\u2212\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
     .replace(/[\u2264\uf0a3]/g, '<=')
     .replace(/[\u2265\uf0b3]/g, '>=')
@@ -252,6 +325,42 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
       y -= lineHeight;
     }
 
+    if (q.diagramUrl) {
+      const diagramFilePath = resolveDiagramPath(q.diagramUrl);
+      if (diagramFilePath) {
+        try {
+          const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ diagramFilePath);
+          const img = await doc.embedPng(imageBytes);
+          const maxImgWidth = CONTENT_WIDTH - 60;
+          const maxImgHeight = 150;
+          const dims = img.scaleToFit(maxImgWidth, maxImgHeight);
+
+          if (y - dims.height < 90) {
+            page.drawText('[Turn Over', {
+              x: A4_WIDTH - MARGIN_RIGHT - 60,
+              y: 35,
+              size: 9,
+              font: fontSans,
+              color: rgb(0.3, 0.3, 0.3),
+            });
+            page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
+            y = A4_HEIGHT - 60;
+          }
+
+          y -= 4;
+          page.drawImage(img, {
+            x: MARGIN_LEFT + (CONTENT_WIDTH - dims.width) / 2,
+            y: y - dims.height,
+            width: dims.width,
+            height: dims.height,
+          });
+          y -= dims.height + 10;
+        } catch {
+          // Graceful fallback if image cannot be embedded
+        }
+      }
+    }
+
     // Citation tag
     y -= 4;
     page.drawText(sanitizeForPdf(`CITATION: ${q.citation}`), {
@@ -419,6 +528,35 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
         if (y < 90) {
           page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
           y = A4_HEIGHT - 60;
+        }
+      }
+    }
+
+    if (a.diagramUrl) {
+      const diagramFilePath = resolveDiagramPath(a.diagramUrl);
+      if (diagramFilePath) {
+        try {
+          const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ diagramFilePath);
+          const img = await doc.embedPng(imageBytes);
+          const maxImgWidth = CONTENT_WIDTH - 60;
+          const maxImgHeight = 150;
+          const dims = img.scaleToFit(maxImgWidth, maxImgHeight);
+
+          if (y - dims.height < 90) {
+            page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
+            y = A4_HEIGHT - 60;
+          }
+
+          y -= 4;
+          page.drawImage(img, {
+            x: MARGIN_LEFT + (CONTENT_WIDTH - dims.width) / 2,
+            y: y - dims.height,
+            width: dims.width,
+            height: dims.height,
+          });
+          y -= dims.height + 10;
+        } catch {
+          // Graceful fallback
         }
       }
     }

@@ -154,6 +154,7 @@ export interface Question {
   textHash: string;
   visualHash?: string | null;
   regions: QuestionRegion[];
+  diagramUrl?: string;
   provenance: QuestionProvenance;
   status: QuestionStatus;
   createdAt: string;
@@ -176,6 +177,7 @@ export interface Answer {
   answerContent: string;
   answerHash: string;
   markSchemeNotes?: string;
+  diagramUrl?: string;
   regions?: AnswerRegion[];
   provenance: QuestionProvenance;
   status: 'VERIFIED' | 'NEEDS_REVIEW' | 'AUTO_MATCHED';

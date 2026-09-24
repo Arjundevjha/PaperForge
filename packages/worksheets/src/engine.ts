@@ -145,6 +145,7 @@ export async function compileWorksheetDocuments(
       textContent: q.textContent,
       marks: q.marks,
       citation: q.provenance.citation,
+      diagramUrl: q.diagramUrl,
     })),
   });
 
@@ -162,6 +163,7 @@ export async function compileWorksheetDocuments(
         markSchemeNotes: a.markSchemeNotes,
         marks: q.marks,
         citation: a.provenance.citation,
+        diagramUrl: a.diagramUrl,
       };
     }),
   });

@@ -24,6 +24,7 @@ import {
   Question,
   Answer,
 } from '@paperforge/shared';
+import MathRenderer from '../ui/MathRenderer';
 
 export interface TeacherResourceHubProps {
   activeSubject: SubjectId;
@@ -442,19 +443,41 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                         {q.marks && <span className="font-mono text-slate-800">[{q.marks} marks]</span>}
                       </div>
 
-                      <div className="font-serif text-[12px] text-justify text-[#111827] pl-1 whitespace-pre-line leading-relaxed">
-                        {cleanQuestionStem(q.textContent, q.questionNumber)}
+                      <div className="font-serif text-[12px] text-justify text-[#111827] pl-1 leading-relaxed">
+                        <MathRenderer content={cleanQuestionStem(q.textContent, q.questionNumber)} />
                       </div>
+
+                      {q.diagramUrl && (
+                        <div className="my-3 flex justify-center">
+                          <img
+                            src={q.diagramUrl}
+                            alt={`Diagram for Question ${idx + 1}`}
+                            className="max-h-64 max-w-full object-contain border border-slate-200 rounded p-1 bg-white shadow-sm"
+                          />
+                        </div>
+                      )}
 
                       {/* Marking Scheme Overlay if enabled */}
                       {showMarkingScheme && ans && (
-                        <div className="mt-2.5 p-2.5 bg-[#f0fdf4] border border-[#86efac] rounded text-[11px] font-sans text-[#166534]">
-                          <div className="font-bold text-[10px] uppercase font-mono tracking-wide text-[#15803d]">
-                            Official Mark Scheme & Steps:
+                        <div className="mt-2.5 p-3 bg-[#f0fdf4] border border-[#86efac] rounded text-[11px] font-sans text-[#166534]">
+                          <div className="font-bold text-[10px] uppercase font-mono tracking-wide text-[#15803d] mb-1.5 flex items-center gap-1.5">
+                            <CheckCircle2 size={12} />
+                            <span>Official Cambridge Mark Scheme & Verbatim Working:</span>
                           </div>
-                          <p className="mt-1 text-black whitespace-pre-line leading-relaxed">{ans.answerContent}</p>
+                          <div className="text-black text-[11px] leading-relaxed">
+                            <MathRenderer content={ans.answerContent} />
+                          </div>
+                          {ans.diagramUrl && (
+                            <div className="my-2.5 flex justify-center">
+                              <img
+                                src={ans.diagramUrl}
+                                alt={`Mark Scheme Diagram for Question ${idx + 1}`}
+                                className="max-h-64 max-w-full object-contain border border-green-300 rounded p-1 bg-white shadow-sm"
+                              />
+                            </div>
+                          )}
                           {ans.markSchemeNotes && (
-                            <div className="mt-1.5 text-[10px] italic text-[#14532d] border-t border-[#bbf7d0] pt-1">
+                            <div className="mt-2 text-[10px] italic text-[#14532d] border-t border-[#bbf7d0] pt-1.5">
                               Examiner Notes: {ans.markSchemeNotes}
                             </div>
                           )}
