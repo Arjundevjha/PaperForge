@@ -127,14 +127,23 @@ export async function POST(request: Request) {
           total_marks: newWorksheet.totalMarks,
           status: newWorksheet.status,
           source_coverage: newWorksheet.sourceCoverage,
-          manifest: newWorksheet.manifest,
-          created_at: newWorksheet.generatedAt,
+          generated_at: newWorksheet.generatedAt,
           updated_at: newWorksheet.updatedAt,
         }, { onConflict: 'id' });
+
+        if (selectedQuestions.length > 0) {
+          const wqRows = selectedQuestions.map((q, idx) => ({
+            worksheet_id: newWorksheet.id,
+            question_id: q.id,
+            position: idx + 1,
+          }));
+          await supabase.from('worksheet_questions').upsert(wqRows, { onConflict: 'worksheet_id,question_id' });
+        }
       } catch (dbErr) {
         console.warn('Failed to persist worksheet to Supabase:', dbErr);
       }
     }
+
 
     return NextResponse.json(
       {

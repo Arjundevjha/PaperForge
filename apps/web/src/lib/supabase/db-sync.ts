@@ -136,14 +136,26 @@ export async function syncWorksheetsFromDb(store: PaperForgeDataStore): Promise<
   if (!supabase) return store.listWorksheets().length;
 
   try {
-    const { data, error } = await supabase
-      .from('worksheets')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [wsRes, wqRes] = await Promise.all([
+      supabase.from('worksheets').select('*').order('generated_at', { ascending: false }),
+      supabase.from('worksheet_questions').select('*').order('position', { ascending: true }),
+    ]);
 
-    if (!error && Array.isArray(data) && data.length > 0) {
+    const data = wsRes.data;
+    const wqData = wqRes.data || [];
+
+    const qMap: Record<string, string[]> = {};
+    for (const row of wqData) {
+      if (!qMap[row.worksheet_id]) {
+        qMap[row.worksheet_id] = [];
+      }
+      qMap[row.worksheet_id].push(row.question_id);
+    }
+
+    if (!wsRes.error && Array.isArray(data) && data.length > 0) {
       for (const w of data) {
         if (!store.getWorksheetById(w.id)) {
+          const questionIds = qMap[w.id] || [];
           store.addWorksheet({
             id: w.id,
             worksheetNumber: w.worksheet_number,
@@ -156,8 +168,16 @@ export async function syncWorksheetsFromDb(store: PaperForgeDataStore): Promise<
             totalMarks: w.total_marks,
             status: w.status,
             sourceCoverage: w.source_coverage || [],
-            manifest: w.manifest,
-            generatedAt: w.created_at,
+            manifest: w.manifest || {
+              worksheetId: w.id,
+              version: w.version,
+              subject: w.subject,
+              chapter: w.chapter,
+              questions: questionIds,
+              totalMarks: w.total_marks,
+              frozenAt: w.generated_at,
+            },
+            generatedAt: w.generated_at,
             updatedAt: w.updated_at,
           });
         }
