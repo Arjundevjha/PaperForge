@@ -15,6 +15,7 @@
     "@paperforge/pdf": "*",
     "@paperforge/questions": "*",
     "@paperforge/shared": "*",
+    "@paperforge/storage": "*",
     "@paperforge/worksheets": "*",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",

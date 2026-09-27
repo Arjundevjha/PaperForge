@@ -21,6 +21,7 @@ import {
 } from '@paperforge/shared';
 import { hashNormalizedText, computeVisualHash } from '@paperforge/dedup';
 import { classifyQuestionContent } from '@paperforge/classification';
+import { getStorageProvider } from '@paperforge/storage';
 
 const execFileAsync = promisify(execFile);
 
@@ -173,6 +174,25 @@ export async function POST(request: Request) {
       const detectedPaperNumber: number = parsedData.source?.paperNumber || 1;
       const compositeAttribution: string = parsedData.source?.composite_attribution || primarySchool;
 
+      // Upload raw files to storage provider (Supabase Storage / Local Disk)
+      const storage = getStorageProvider();
+      const storagePrefix = `incoming/${detectedYear}/${primarySchool}`;
+      const qpStoragePath = `${storagePrefix}/${primarySchool}_${detectedYear}_P${detectedPaperNumber}_QP_${sourceHash.slice(0, 8)}.pdf`;
+      try {
+        await storage.upload(qpStoragePath, fileBuffer, 'application/pdf');
+      } catch (err: unknown) {
+        console.warn('Storage upload notice for QP:', err instanceof Error ? err.message : err);
+      }
+
+      if (solutionsBuffer) {
+        const solStoragePath = `${storagePrefix}/${primarySchool}_${detectedYear}_P${detectedPaperNumber}_MS_${sourceHash.slice(0, 8)}.pdf`;
+        try {
+          await storage.upload(solStoragePath, solutionsBuffer, 'application/pdf');
+        } catch (err: unknown) {
+          console.warn('Storage upload notice for MS:', err instanceof Error ? err.message : err);
+        }
+      }
+
       const newSource: SourceDocument = {
         id: `src_${primarySchool.toLowerCase()}_${detectedSubject}_${detectedYear}_p${detectedPaperNumber}_${Date.now()}`,
         filename: customTitle || filename,
@@ -182,7 +202,7 @@ export async function POST(request: Request) {
         paperType: 'PROMO',
         paperNumber: detectedPaperNumber,
         sourceHash,
-        storageKey: `sources/${detectedYear}/${primarySchool}_${detectedSubject}_P${detectedPaperNumber}.pdf`,
+        storageKey: qpStoragePath,
         pageCount: parsedData.source?.pageCount || 1,
         status: 'READY',
         createdAt: new Date().toISOString(),

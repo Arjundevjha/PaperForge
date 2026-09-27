@@ -17,7 +17,9 @@
     "fallow": "fallow dead-code",
     "fallow:fix": "fallow fix --yes",
     "scan:security": "echo 'Running Snyk security scan...'",
-    "ingest": "tsx scripts/ingest_paper.ts"
+    "ingest": "tsx scripts/ingest_paper.ts",
+    "storage:status": "tsx scripts/storage_cli.ts --status",
+    "storage:sync-diagrams": "tsx scripts/storage_cli.ts --sync-diagrams"
   },
   "keywords": [
     "a-level",

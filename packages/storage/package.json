@@ -1,0 +1,11 @@
+{
+  "name": "@paperforge/storage",
+  "version": "1.0.0",
+  "description": "PaperForge pluggable storage abstraction layer supporting Supabase Storage, S3/R2, and Local Disk",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@paperforge/shared": "*",
+    "@supabase/supabase-js": "^2.116.0"
+  }
+}
