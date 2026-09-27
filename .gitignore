@@ -64,6 +64,7 @@ Thumbs.db
 scratch/
 tmp/
 papers/
+generated_worksheets/
 *.pdf
 **/*.pdf
 .vercel

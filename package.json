@@ -21,7 +21,8 @@
     "ingest:bulk": "tsx packages/ingestion/src/cli.ts",
     "storage:status": "tsx scripts/storage_cli.ts --status",
     "storage:sync-diagrams": "tsx scripts/storage_cli.ts --sync-diagrams",
-    "scrape:holygrail": "tsx scripts/scrape_holygrail_h2math.ts"
+    "scrape:holygrail": "tsx scripts/scrape_holygrail_h2math.ts",
+    "worksheet:generate": "tsx scripts/generate_worksheet_cli.ts"
   },
   "keywords": [
     "a-level",
