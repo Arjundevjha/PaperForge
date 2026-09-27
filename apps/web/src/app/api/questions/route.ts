@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getGlobalStore } from '@paperforge/db';
 import { SubjectIdSchema, SingaporeSchoolCodeSchema } from '@paperforge/shared';
+import { syncAllQuestionsFromDb } from '../../../lib/supabase/db-sync';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -19,7 +20,12 @@ export async function GET(request: Request) {
   }
 
   const store = getGlobalStore();
-  (store as any).reloadFromDisk?.();
+
+  // If store only has canonical seed questions (<= 26), synchronize all questions from PostgreSQL
+  if (store.listQuestions().length <= 26 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    await syncAllQuestionsFromDb(store);
+  }
+
   const questions = store.listQuestions({
     subject: parsedSubject?.data,
     school: parsedSchool?.data,

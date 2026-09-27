@@ -23,6 +23,7 @@ import { hashNormalizedText, computeVisualHash } from '@paperforge/dedup';
 import { classifyQuestionContent } from '@paperforge/classification';
 import { getStorageProvider } from '@paperforge/storage';
 import { getSupabaseAdmin } from '../../../lib/supabase/admin';
+import { syncAllQuestionsFromDb } from '../../../lib/supabase/db-sync';
 
 const execFileAsync = promisify(execFile);
 
@@ -143,6 +144,10 @@ export async function GET() {
     sources = store.listSources();
   }
 
+  if (store.listQuestions().length <= 26 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    await syncAllQuestionsFromDb(store);
+  }
+
   const questions = store.listQuestions();
 
   return NextResponse.json({
@@ -173,11 +178,14 @@ export async function POST(request: Request) {
 
       if (body.action === 'sync' || body.action === 'reprocess') {
         const added = await loadSourcesFromDbOrBucket(store);
+        await syncAllQuestionsFromDb(store);
         const currentSources = store.listSources();
+        const currentQuestions = store.listQuestions();
         return NextResponse.json({
           success: true,
-          message: `Successfully synchronized sources (total: ${currentSources.length} sources).`,
+          message: `Successfully synchronized sources and questions (total: ${currentSources.length} sources, ${currentQuestions.length} questions).`,
           count: currentSources.length,
+          totalQuestions: currentQuestions.length,
           data: currentSources,
         });
       }

@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as path from 'path';
 import * as fs from 'fs';
-import { REAL_PAPER_3_PACKAGE, REAL_PAPER_4_PACKAGE } from '../packages/db/src/real-papers';
 
 // Load .env.local
 const envPath = path.resolve(process.cwd(), '.env.local');
@@ -32,227 +31,149 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false },
 });
 
+function cleanText(str: string | null | undefined): string | null {
+  if (typeof str !== 'string') return str || null;
+  return str.replace(/\0/g, '').replace(/\\u0000/g, '');
+}
+
 async function main() {
-  console.log('--- 1. Syncing Supabase Storage Bucket -> PostgreSQL sources table ---');
-  const { data: years, error: yearsErr } = await supabase.storage.from('paperforge').list('incoming');
-  if (yearsErr) {
-    console.error('Error listing incoming years:', yearsErr);
-    return;
+  console.log('================================================================');
+  console.log('  PAPERFORGE — COMPLETE SUPABASE DATABASE SYNCHRONIZATION');
+  console.log('================================================================\n');
+
+  const storeFilePath = path.resolve(process.cwd(), 'packages', 'db', '.paperforge-store.json');
+  if (!fs.existsSync(storeFilePath)) {
+    console.error('Local store file not found:', storeFilePath);
+    process.exit(1);
   }
 
-  const sourcesToUpsert: any[] = [];
+  const storeData = JSON.parse(fs.readFileSync(storeFilePath, 'utf-8'));
+  const sources = storeData.sources || [];
+  const questions = storeData.questions || [];
+  const answers = storeData.answers || [];
+  const worksheets = storeData.worksheets || [];
 
-  for (const y of years || []) {
-    const yearNum = parseInt(y.name, 10);
-    if (isNaN(yearNum)) continue;
+  console.log(`[i] Loaded from store: ${sources.length} sources, ${questions.length} questions, ${answers.length} answers, ${worksheets.length} worksheets.\n`);
 
-    const { data: schools } = await supabase.storage.from('paperforge').list(`incoming/${y.name}`);
-    for (const s of schools || []) {
-      const schoolCode = s.name;
-      const { data: files } = await supabase.storage.from('paperforge').list(`incoming/${y.name}/${s.name}`);
+  // 1. Upsert Sources in Batches of 100
+  console.log('[+] Phase 1: Upserting sources into Supabase PostgreSQL...');
+  const sourceRows = sources.map((s: any) => ({
+    id: s.id,
+    filename: cleanText(s.filename) || 'paper.pdf',
+    school: s.school,
+    year: s.year,
+    subject: s.subject || 'mathematics',
+    paper_type: s.paperType || 'PRELIM',
+    paper_number: s.paperNumber || 1,
+    source_hash: s.sourceHash || `hash_${s.id}`,
+    storage_key: s.storageKey || `incoming/${s.filename}`,
+    page_count: s.pageCount || 8,
+    status: s.status || 'READY',
+    created_at: s.createdAt || new Date().toISOString(),
+    updated_at: s.updatedAt || new Date().toISOString(),
+  }));
 
-      for (const f of files || []) {
-        if (!f.name.endsWith('.pdf')) continue;
-
-        const isQP = f.name.includes('_QP_') || !f.name.includes('_MS_');
-        const paperMatch = f.name.match(/_P([1-4])_/i);
-        const paperNumber = paperMatch ? parseInt(paperMatch[1], 10) : 1;
-        const hashMatch = f.name.match(/_([a-f0-9]{8})\.pdf$/i);
-        const sourceHash = hashMatch ? hashMatch[1] : Buffer.from(f.name).toString('hex').slice(0, 8);
-        const isPromo = f.name.toLowerCase().includes('promo');
-
-        const docId = `src_${schoolCode.toLowerCase()}_math_${yearNum}_p${paperNumber}_${sourceHash}`;
-
-        sourcesToUpsert.push({
-          id: docId,
-          filename: f.name,
-          school: schoolCode,
-          year: yearNum,
-          subject: 'mathematics',
-          paper_type: isPromo ? 'PROMO' : 'PRELIM',
-          paper_number: paperNumber,
-          source_hash: sourceHash,
-          storage_key: `incoming/${y.name}/${s.name}/${f.name}`,
-          page_count: 8,
-          status: 'READY',
-          created_at: f.created_at || new Date().toISOString(),
-          updated_at: f.updated_at || new Date().toISOString(),
-        });
-      }
-    }
-  }
-
-  console.log(`Discovered ${sourcesToUpsert.length} PDF papers in storage bucket.`);
-
-  // Upsert in batches of 50
-  for (let i = 0; i < sourcesToUpsert.length; i += 50) {
-    const batch = sourcesToUpsert.slice(i, i + 50);
-    const { error } = await supabase.from('sources').upsert(batch, { onConflict: 'source_hash' });
+  for (let i = 0; i < sourceRows.length; i += 100) {
+    const batch = sourceRows.slice(i, i + 100);
+    const { error } = await supabase.from('sources').upsert(batch, { onConflict: 'id' });
     if (error) {
-      console.error(`Error upserting batch ${i} - ${i + 50}:`, error);
+      console.error(`Error in sources batch ${i}-${i + 100}:`, error.message);
     }
   }
-  console.log('✓ Successfully populated Supabase sources table!');
+  console.log(`[✓] Upserted ${sourceRows.length} sources.\n`);
 
-  console.log('\n--- 2. Seeding Canonical Questions & Answers into PostgreSQL ---');
-  // First ensure canonical seed sources are in sources table
-  const p3Source = {
-    id: REAL_PAPER_3_PACKAGE.source.id,
-    filename: REAL_PAPER_3_PACKAGE.source.filename,
-    school: REAL_PAPER_3_PACKAGE.source.school,
-    year: REAL_PAPER_3_PACKAGE.source.year,
-    subject: REAL_PAPER_3_PACKAGE.source.subject,
-    paper_type: REAL_PAPER_3_PACKAGE.source.paperType,
-    paper_number: REAL_PAPER_3_PACKAGE.source.paperNumber,
-    source_hash: REAL_PAPER_3_PACKAGE.source.sourceHash,
-    storage_key: REAL_PAPER_3_PACKAGE.source.storageKey,
-    page_count: REAL_PAPER_3_PACKAGE.source.pageCount,
-    status: REAL_PAPER_3_PACKAGE.source.status,
-  };
-  const p4Source = {
-    id: REAL_PAPER_4_PACKAGE.source.id,
-    filename: REAL_PAPER_4_PACKAGE.source.filename,
-    school: REAL_PAPER_4_PACKAGE.source.school,
-    year: REAL_PAPER_4_PACKAGE.source.year,
-    subject: REAL_PAPER_4_PACKAGE.source.subject,
-    paper_type: REAL_PAPER_4_PACKAGE.source.paperType,
-    paper_number: REAL_PAPER_4_PACKAGE.source.paperNumber,
-    source_hash: REAL_PAPER_4_PACKAGE.source.sourceHash,
-    storage_key: REAL_PAPER_4_PACKAGE.source.storageKey,
-    page_count: REAL_PAPER_4_PACKAGE.source.pageCount,
-    status: REAL_PAPER_4_PACKAGE.source.status,
-  };
-
-  await supabase.from('sources').upsert([p3Source, p4Source], { onConflict: 'source_hash' });
-
-  // Questions
-  const allQuestions = [...REAL_PAPER_3_PACKAGE.questions, ...REAL_PAPER_4_PACKAGE.questions];
-  const questionsRows = allQuestions.map((q) => ({
+  // 2. Upsert Questions in Batches of 100
+  console.log('[+] Phase 2: Upserting questions into Supabase PostgreSQL (with null byte sanitization)...');
+  const questionRows = questions.map((q: any) => ({
     id: q.id,
     source_id: q.sourceId,
     question_number: q.questionNumber,
-    parent_question_id: q.parentQuestionId,
-    subject: q.subject,
-    chapter: q.chapter,
-    subtopic: q.subtopic,
-    syllabus_version_id: q.syllabusVersionId,
-    text_content: q.textContent,
-    marks: q.marks,
-    text_hash: q.textHash,
-    visual_hash: q.visualHash,
-    status: q.status,
+    parent_question_id: q.parentQuestionId || null,
+    subject: q.subject || 'mathematics',
+    chapter: cleanText(q.chapter) || 'Promotional Exam Revision',
+    subtopic: cleanText(q.subtopic) || null,
+    syllabus_version_id: q.syllabusVersionId || 'SEAB-9758',
+    text_content: cleanText(q.textContent) || '',
+    marks: q.marks || 4,
+    text_hash: q.textHash || 'hash',
+    visual_hash: q.visualHash || null,
+    status: q.status || 'READY',
+    created_at: q.createdAt || new Date().toISOString(),
+    updated_at: q.updatedAt || new Date().toISOString(),
   }));
 
-  const { error: qErr } = await supabase.from('questions').upsert(questionsRows, { onConflict: 'id' });
-  if (qErr) console.error('Error upserting questions:', qErr);
-  else console.log(`✓ Upserted ${questionsRows.length} canonical questions.`);
+  for (let i = 0; i < questionRows.length; i += 100) {
+    const batch = questionRows.slice(i, i + 100);
+    const { error } = await supabase.from('questions').upsert(batch, { onConflict: 'id' });
+    if (error) {
+      console.error(`Error in questions batch ${i}-${i + 100}:`, error.message);
+    }
+  }
+  console.log(`[✓] Upserted ${questionRows.length} questions.\n`);
 
-  // Answers
-  const allAnswers = [...REAL_PAPER_3_PACKAGE.answers, ...REAL_PAPER_4_PACKAGE.answers];
-  const answersRows = allAnswers.map((a) => ({
+  // 3. Upsert Answers in Batches of 100
+  console.log('[+] Phase 3: Upserting answers into Supabase PostgreSQL...');
+  const answerRows = answers.map((a: any) => ({
     id: a.id,
     source_id: a.sourceId,
     question_id: a.questionId,
     question_number: a.questionNumber,
-    answer_content: a.answerContent,
-    answer_hash: a.answerHash,
-    mark_scheme_notes: a.markSchemeNotes,
-    status: a.status,
+    answer_content: cleanText(a.answerContent) || '',
+    answer_hash: a.answerHash || 'anshash',
+    mark_scheme_notes: cleanText(a.markSchemeNotes) || null,
+    status: a.status || 'AUTO_MATCHED',
   }));
 
-  const { error: aErr } = await supabase.from('answers').upsert(answersRows, { onConflict: 'id' });
-  if (aErr) console.error('Error upserting answers:', aErr);
-  else console.log(`✓ Upserted ${answersRows.length} canonical answers.`);
+  for (let i = 0; i < answerRows.length; i += 100) {
+    const batch = answerRows.slice(i, i + 100);
+    const { error } = await supabase.from('answers').upsert(batch, { onConflict: 'id' });
+    if (error) {
+      console.error(`Error in answers batch ${i}-${i + 100}:`, error.message);
+    }
+  }
+  console.log(`[✓] Upserted ${answerRows.length} answers.\n`);
 
-  // Worksheets
-  console.log('\n--- 3. Seeding Canonical Worksheets into PostgreSQL ---');
-  const canonicalWorksheets = [
-    {
-      id: 'ws_math_01',
-      worksheet_number: 'WS-MATH-01',
-      title: 'WS-MATH-01: Functions and Graphs Revision (JPJC & EJC)',
-      subject: 'mathematics',
-      chapter: 'Functions and Graphs',
-      syllabus_version_id: 'SEAB-9758-Official',
-      version: 1,
-      question_count: 10,
-      total_marks: 78,
-      status: 'PUBLISHED',
-      source_coverage: ['JPJC', 'EJC'],
-    },
-    {
-      id: 'ws_math_02',
-      worksheet_number: 'WS-MATH-02',
-      title: 'WS-MATH-02: Calculus Revision: Differentiation & Integration (JPJC & EJC)',
-      subject: 'mathematics',
-      chapter: 'Calculus',
-      syllabus_version_id: 'SEAB-9758-Official',
-      version: 1,
-      question_count: 10,
-      total_marks: 82,
-      status: 'PUBLISHED',
-      source_coverage: ['JPJC', 'EJC'],
-    },
-    {
-      id: 'ws_math_03',
-      worksheet_number: 'WS-MATH-03',
-      title: 'WS-MATH-03: Sequences and Series: AP/GP (JPJC & EJC)',
-      subject: 'mathematics',
-      chapter: 'Sequences and Series',
-      syllabus_version_id: 'SEAB-9758-Official',
-      version: 1,
-      question_count: 2,
-      total_marks: 17,
-      status: 'PUBLISHED',
-      source_coverage: ['JPJC', 'EJC'],
-    },
-    {
-      id: 'ws_math_04',
-      worksheet_number: 'WS-MATH-04',
-      title: 'WS-MATH-04: Vectors: Lines & Planes in 3D (JPJC & EJC)',
-      subject: 'mathematics',
-      chapter: 'Vectors',
-      syllabus_version_id: 'SEAB-9758-Official',
-      version: 1,
-      question_count: 4,
-      total_marks: 38,
-      status: 'PUBLISHED',
-      source_coverage: ['JPJC', 'EJC'],
-    },
-    {
-      id: 'ws_math_05',
-      worksheet_number: 'WS-MATH-05',
-      title: 'WS-MATH-05: Promotional Examination Practice Paper (All Topics)',
-      subject: 'mathematics',
-      chapter: 'Promotional Exam Revision (All Topics)',
-      syllabus_version_id: 'SEAB-9758-Official',
-      version: 1,
-      question_count: 10,
-      total_marks: 80,
-      status: 'PUBLISHED',
-      source_coverage: ['JPJC', 'EJC'],
-    },
-  ];
+  // 4. Upsert Worksheets
+  console.log('[+] Phase 4: Upserting worksheets into Supabase PostgreSQL...');
+  const worksheetRows = worksheets.map((w: any) => ({
+    id: w.id,
+    worksheet_number: w.worksheetNumber || w.id.toUpperCase(),
+    title: w.title,
+    subject: w.subject || 'mathematics',
+    chapter: w.chapter || 'All Chapters',
+    syllabus_version_id: w.syllabusVersionId || 'SEAB-9758-Official',
+    version: w.version || 1,
+    question_count: w.questionCount || w.manifest?.questions?.length || 10,
+    total_marks: w.totalMarks || 80,
+    status: w.status || 'PUBLISHED',
+    source_coverage: w.sourceCoverage || ['JPJC', 'EJC'],
+    generated_at: w.generatedAt || new Date().toISOString(),
+    updated_at: w.updatedAt || new Date().toISOString(),
+  }));
 
-  const { error: wsErr } = await supabase.from('worksheets').upsert(canonicalWorksheets, { onConflict: 'id' });
-  if (wsErr) console.error('Error upserting worksheets:', wsErr);
-  else console.log(`✓ Upserted ${canonicalWorksheets.length} canonical worksheets.`);
+  const { error: wsErr } = await supabase.from('worksheets').upsert(worksheetRows, { onConflict: 'id' });
+  if (wsErr) {
+    console.error('Error upserting worksheets:', wsErr.message);
+  } else {
+    console.log(`[✓] Upserted ${worksheetRows.length} worksheets.\n`);
+  }
 
-  // Verify Counts
-  console.log('\n--- 4. Verification in Supabase PostgreSQL ---');
+  // 5. Verification
+  console.log('================================================================');
+  console.log('  VERIFIED POSTGRESQL ROW COUNTS');
+  console.log('================================================================');
   const { count: srcCount } = await supabase.from('sources').select('*', { count: 'exact', head: true });
   const { count: qCount } = await supabase.from('questions').select('*', { count: 'exact', head: true });
   const { count: aCount } = await supabase.from('answers').select('*', { count: 'exact', head: true });
   const { count: wsCount } = await supabase.from('worksheets').select('*', { count: 'exact', head: true });
   const { count: revCount } = await supabase.from('review_items').select('*', { count: 'exact', head: true });
 
-  console.log({
-    sourcesInPostgres: srcCount,
-    questionsInPostgres: qCount,
-    answersInPostgres: aCount,
-    worksheetsInPostgres: wsCount,
-    reviewItemsInPostgres: revCount,
-  });
+  console.log(`  Sources in PostgreSQL:      ${srcCount}`);
+  console.log(`  Questions in PostgreSQL:    ${qCount}`);
+  console.log(`  Answers in PostgreSQL:      ${aCount}`);
+  console.log(`  Worksheets in PostgreSQL:   ${wsCount}`);
+  console.log(`  Review Items in PostgreSQL: ${revCount}`);
+  console.log('================================================================\n');
 }
 
 main().catch(console.error);
