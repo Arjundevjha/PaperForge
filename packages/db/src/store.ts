@@ -66,7 +66,7 @@ export class PaperForgeDataStore {
   }
 
   private saveToDisk(): void {
-    if (!this.persistenceFile) return;
+    if (!this.persistenceFile || process.env.VERCEL) return;
     try {
       const payload = {
         sources: Array.from(this.sources.values()),
@@ -165,6 +165,13 @@ export class PaperForgeDataStore {
     return source;
   }
 
+  addSources(sources: SourceDocument[]): void {
+    for (const s of sources) {
+      this.sources.set(s.id, s);
+    }
+    this.saveToDisk();
+  }
+
   deleteSource(id: string): boolean {
     const source = this.sources.get(id);
     if (!source) return false;
@@ -238,10 +245,24 @@ export class PaperForgeDataStore {
     return question;
   }
 
+  addQuestions(questions: Question[]): void {
+    for (const q of questions) {
+      this.questions.set(q.id, q);
+    }
+    this.saveToDisk();
+  }
+
   addAnswer(answer: Answer): Answer {
     this.answers.set(answer.questionId, answer);
     this.saveToDisk();
     return answer;
+  }
+
+  addAnswers(answers: Answer[]): void {
+    for (const a of answers) {
+      this.answers.set(a.questionId, a);
+    }
+    this.saveToDisk();
   }
 
   getAnswerByQuestionId(questionId: string): Answer | undefined {

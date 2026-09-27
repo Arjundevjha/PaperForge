@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from './admin';
 import type { PaperForgeDataStore } from '@paperforge/db';
-import { formatProvenance, SingaporeSchoolCode } from '@paperforge/shared';
+import { formatProvenance, SingaporeSchoolCode, Question, Answer } from '@paperforge/shared';
 
 export async function syncAllQuestionsFromDb(store: PaperForgeDataStore): Promise<number> {
   const supabase = getSupabaseAdmin();
@@ -22,6 +22,7 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore): Promis
     }
 
     if (allQuestions.length > 0) {
+      const newQuestions: Question[] = [];
       for (const q of allQuestions) {
         if (!store.getQuestionById(q.id)) {
           const parts = q.id.split('-');
@@ -39,7 +40,7 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore): Promis
             q.source_id
           );
 
-          store.addQuestion({
+          newQuestions.push({
             id: q.id,
             sourceId: q.source_id,
             questionNumber: q.question_number,
@@ -68,6 +69,9 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore): Promis
           });
         }
       }
+      if (newQuestions.length > 0) {
+        store.addQuestions(newQuestions);
+      }
     }
 
     let allAnswers: any[] = [];
@@ -84,6 +88,7 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore): Promis
     }
 
     if (allAnswers.length > 0) {
+      const newAnswers: Answer[] = [];
       for (const a of allAnswers) {
         if (!store.getAnswerByQuestionId(a.question_id)) {
           const parts = a.question_id.split('-');
@@ -101,7 +106,7 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore): Promis
             a.source_id
           );
 
-          store.addAnswer({
+          newAnswers.push({
             id: a.id,
             sourceId: a.source_id,
             questionId: a.question_id,
@@ -113,6 +118,9 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore): Promis
             status: a.status,
           });
         }
+      }
+      if (newAnswers.length > 0) {
+        store.addAnswers(newAnswers);
       }
     }
 
