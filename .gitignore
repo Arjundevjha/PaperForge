@@ -63,6 +63,7 @@ Thumbs.db
 # Temporary & Uploaded PDF examination files
 scratch/
 tmp/
+papers/
 *.pdf
 **/*.pdf
 .vercel
