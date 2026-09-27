@@ -75,6 +75,7 @@ export default function DashboardPage() {
           questions={questions}
           worksheets={worksheets}
           reviewItems={reviewItems}
+          onRefresh={fetchDashboardData}
         />
       )}
     </AppShell>

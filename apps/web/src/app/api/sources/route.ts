@@ -37,10 +37,69 @@ function getWorkerScriptPath(): string {
   return path.resolve(process.cwd(), 'scripts/extract_pdf_worker.py');
 }
 
+async function syncBucketSourcesToStore(store: any): Promise<number> {
+  try {
+    const storage = getStorageProvider();
+    const years = await storage.list('incoming');
+    if (!years || years.length === 0) return 0;
+
+    let added = 0;
+    for (const y of years) {
+      const yearNum = parseInt(y.name, 10);
+      if (isNaN(yearNum)) continue;
+      const schools = await storage.list(`incoming/${y.name}`);
+      for (const s of schools) {
+        const schoolCode = s.name as SingaporeSchoolCode;
+        const files = await storage.list(`incoming/${y.name}/${s.name}`);
+        for (const f of files) {
+          const isQP = f.name.includes('_QP_') || !f.name.includes('_MS_');
+          const paperMatch = f.name.match(/_P([1-4])_/i);
+          const paperNumber = paperMatch ? parseInt(paperMatch[1], 10) : 1;
+          const hashMatch = f.name.match(/_([a-f0-9]{8})\.pdf$/i);
+          const hash = hashMatch ? hashMatch[1] : createHash('sha256').update(f.name).digest('hex').slice(0, 8);
+
+          const existing = store.getSourceByHash(hash);
+          if (!existing) {
+            const isPromo = f.name.toLowerCase().includes('promo');
+            const newDoc: SourceDocument = {
+              id: `src_${schoolCode.toLowerCase()}_math_${yearNum}_p${paperNumber}_${hash}`,
+              filename: f.name,
+              school: schoolCode,
+              year: yearNum,
+              subject: 'mathematics',
+              paperType: isPromo ? 'PROMO' : 'PRELIM',
+              paperNumber,
+              sourceHash: hash,
+              storageKey: f.path,
+              pageCount: 8,
+              status: 'READY',
+              createdAt: f.updatedAt || new Date().toISOString(),
+              updatedAt: f.updatedAt || new Date().toISOString(),
+            };
+            store.addSource(newDoc);
+            added++;
+          }
+        }
+      }
+    }
+    return added;
+  } catch (err) {
+    console.warn('Bucket sync error:', err);
+    return 0;
+  }
+}
+
 export async function GET() {
   const store = getGlobalStore();
   (store as any).reloadFromDisk?.();
-  const sources = store.listSources();
+  let sources = store.listSources();
+
+  // If store only has canonical seed papers (<= 2), attempt automatic bucket discovery
+  if (sources.length <= 2 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    await syncBucketSourcesToStore(store);
+    sources = store.listSources();
+  }
+
   const questions = store.listQuestions();
 
   return NextResponse.json({
@@ -56,7 +115,7 @@ export async function POST(request: Request) {
     const store = getGlobalStore();
     const contentType = request.headers.get('content-type') || '';
 
-    // 1. JSON Payload: Administrative Reset
+    // 1. JSON Payload: Administrative Reset or Bucket Sync
     if (contentType.includes('application/json')) {
       const body = await request.json();
 
@@ -66,6 +125,17 @@ export async function POST(request: Request) {
           success: true,
           message: 'Data store reset to clean production state (0 sources, 0 questions).',
           count: 0,
+        });
+      }
+
+      if (body.action === 'sync' || body.action === 'reprocess') {
+        const added = await syncBucketSourcesToStore(store);
+        const currentSources = store.listSources();
+        return NextResponse.json({
+          success: true,
+          message: `Successfully synchronized ${added} new papers from bucket (total: ${currentSources.length} sources).`,
+          count: currentSources.length,
+          data: currentSources,
         });
       }
 

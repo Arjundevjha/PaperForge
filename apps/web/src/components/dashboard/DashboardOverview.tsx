@@ -22,6 +22,7 @@ export interface DashboardOverviewProps {
   questions: Question[];
   worksheets: Worksheet[];
   reviewItems: ReviewItem[];
+  onRefresh?: () => void;
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
@@ -29,18 +30,30 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   questions,
   worksheets,
   reviewItems,
+  onRefresh,
 }) => {
   const [syncing, setSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState('18 Sep 2026, 15:30:00 SGT');
+  const [lastSyncTime, setLastSyncTime] = useState(
+    new Date().toLocaleString('en-SG', { timeZone: 'Asia/Singapore' }) + ' SGT'
+  );
 
   const pendingReview = reviewItems.filter((r) => r.status === 'PENDING').length;
 
-  const handleTriggerSync = () => {
+  const handleTriggerSync = async () => {
     setSyncing(true);
-    setTimeout(() => {
-      setSyncing(false);
+    try {
+      await fetch('/api/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync' }),
+      });
       setLastSyncTime(new Date().toLocaleString('en-SG', { timeZone: 'Asia/Singapore' }) + ' SGT');
-    }, 1200);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error('Failed to trigger bucket reprocess:', err);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const stages = [
