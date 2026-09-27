@@ -30,6 +30,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
   const [search, setSearch] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedSchool, setSelectedSchool] = useState<string>('all');
+  const [selectedChapter, setSelectedChapter] = useState<string>('all');
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
 
   // Sync selectedSubject if activeSubject changes and is not 'all'
@@ -43,8 +44,19 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
     }
   }, [activeSubject, questions, selectedSubject]);
 
+  const availableChapters = React.useMemo(() => {
+    const chaptersSet = new Set<string>();
+    for (const q of questions) {
+      if (selectedSubject === 'all' || q.subject === selectedSubject) {
+        if (q.chapter) chaptersSet.add(q.chapter);
+      }
+    }
+    return Array.from(chaptersSet).sort();
+  }, [questions, selectedSubject]);
+
   const filtered = questions.filter((q) => {
     if (selectedSubject !== 'all' && q.subject !== selectedSubject) return false;
+    if (selectedChapter !== 'all' && q.chapter !== selectedChapter) return false;
     if (selectedSchool !== 'all' && q.provenance.school !== selectedSchool) return false;
     if (search) {
       const query = search.toLowerCase();
@@ -145,6 +157,21 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
               />
             </div>
 
+            {/* Chapter Filter */}
+            <select
+              value={selectedChapter}
+              onChange={(e) => setSelectedChapter(e.target.value)}
+              aria-label="Filter questions by Syllabus Chapter"
+              className="bg-surface-2 border border-border-subdued rounded px-3 py-1.5 text-xs text-[#dee2f1] focus:outline-none max-w-[180px] truncate"
+            >
+              <option value="all">All Chapters ({availableChapters.length})</option>
+              {availableChapters.map((ch) => (
+                <option key={ch} value={ch}>
+                  {ch}
+                </option>
+              ))}
+            </select>
+
             {/* School Filter */}
             <select
               value={selectedSchool}
@@ -177,6 +204,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
                     onClick={() => {
                       setSelectedSubject('all');
                       setSelectedSchool('all');
+                      setSelectedChapter('all');
                       setSearch('');
                     }}
                     className="px-3 py-1.5 rounded bg-primary-cyan text-[#090e18] text-xs font-semibold hover:bg-primary-hover transition-all"

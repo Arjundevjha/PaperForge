@@ -11,7 +11,12 @@ export async function GET(
   const store = getGlobalStore();
   let worksheet = store.getWorksheetById(id);
 
-  if ((!worksheet || store.listQuestions().length <= 26) && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (
+    (!worksheet ||
+      worksheet.manifest?.questions?.length !== worksheet.questionCount ||
+      store.listQuestions().length <= 26) &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL
+  ) {
     await syncWorksheetsFromDb(store);
     await syncAllQuestionsFromDb(store);
     worksheet = store.getWorksheetById(id);

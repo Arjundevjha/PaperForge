@@ -20,7 +20,7 @@ export async function GET(request: Request) {
         query = query.eq('status', status);
       }
       const { data: dbItems, error } = await query;
-      if (!error && Array.isArray(dbItems) && dbItems.length > 0) {
+      if (!error && Array.isArray(dbItems)) {
         const mappedItems: ReviewItem[] = dbItems.map((row) => ({
           id: row.id,
           entityType: row.entity_type,
@@ -52,23 +52,6 @@ export async function GET(request: Request) {
           count: mappedItems.length,
           data: mappedItems,
         });
-      } else if (!error && Array.isArray(dbItems) && dbItems.length === 0) {
-        // First-time seed of initial in-memory items to Supabase
-        const initial = store.listReviewItems();
-        if (initial.length > 0) {
-          const toInsert = initial.map((item) => ({
-            id: item.id,
-            entity_type: item.entityType,
-            entity_id: item.entityId,
-            issue_type: item.issueType,
-            confidence: item.confidence,
-            details: item.details,
-            status: item.status,
-            reviewed_by: item.reviewedBy || null,
-            reviewed_at: item.reviewedAt || null,
-          }));
-          await supabase.from('review_items').upsert(toInsert, { onConflict: 'id' });
-        }
       }
     } catch (dbErr) {
       console.warn('Supabase review_items fetch warning:', dbErr);

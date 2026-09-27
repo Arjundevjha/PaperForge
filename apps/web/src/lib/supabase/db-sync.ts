@@ -153,34 +153,33 @@ export async function syncWorksheetsFromDb(store: PaperForgeDataStore): Promise<
     }
 
     if (!wsRes.error && Array.isArray(data) && data.length > 0) {
+      store.clearWorksheets();
       for (const w of data) {
-        if (!store.getWorksheetById(w.id)) {
-          const questionIds = qMap[w.id] || [];
-          store.addWorksheet({
-            id: w.id,
-            worksheetNumber: w.worksheet_number,
-            title: w.title,
+        const questionIds = qMap[w.id] || [];
+        store.addWorksheet({
+          id: w.id,
+          worksheetNumber: w.worksheet_number,
+          title: w.title,
+          subject: w.subject,
+          chapter: w.chapter,
+          syllabusVersionId: w.syllabus_version_id,
+          version: w.version,
+          questionCount: w.question_count,
+          totalMarks: w.total_marks,
+          status: w.status,
+          sourceCoverage: w.source_coverage || [],
+          manifest: {
+            worksheetId: w.id,
+            version: w.version,
             subject: w.subject,
             chapter: w.chapter,
-            syllabusVersionId: w.syllabus_version_id,
-            version: w.version,
-            questionCount: w.question_count,
+            questions: questionIds,
             totalMarks: w.total_marks,
-            status: w.status,
-            sourceCoverage: w.source_coverage || [],
-            manifest: w.manifest || {
-              worksheetId: w.id,
-              version: w.version,
-              subject: w.subject,
-              chapter: w.chapter,
-              questions: questionIds,
-              totalMarks: w.total_marks,
-              frozenAt: w.generated_at,
-            },
-            generatedAt: w.generated_at,
-            updatedAt: w.updated_at,
-          });
-        }
+            frozenAt: w.generated_at,
+          },
+          generatedAt: w.generated_at,
+          updatedAt: w.updated_at,
+        });
       }
     }
     return store.listWorksheets().length;

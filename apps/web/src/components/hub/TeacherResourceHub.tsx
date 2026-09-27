@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Download,
   FileText,
@@ -63,6 +63,11 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
   const [showMarkingScheme, setShowMarkingScheme] = useState<boolean>(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
   const [generating, setGenerating] = useState<boolean>(false);
+  const [displayLimit, setDisplayLimit] = useState<number>(30);
+
+  useEffect(() => {
+    setDisplayLimit(30);
+  }, [selectedWorksheetId]);
 
   const selectedChapter = currentSyllabus.chapters.find((c) => c.id === selectedChapterId);
 
@@ -402,7 +407,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                 {currentMeta.level.toUpperCase()} {currentMeta.name.toUpperCase()} • CODE {currentMeta.syllabusCode}
               </div>
               <div className="text-[11px] font-sans text-[#374151] mt-0.5">
-                Chapter: {activeWorksheet?.chapter || 'Organic Chemistry'} [{activeWorksheet?.worksheetNumber || 'WS-01'}]
+                Chapter: {activeWorksheet?.chapter || selectedChapter?.name || 'All Topics Revision'} [{activeWorksheet?.worksheetNumber || 'WS-01'}]
               </div>
             </div>
 
@@ -415,7 +420,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
 
             <div className="mt-2 flex justify-between text-[10px] font-sans text-[#374151] border-b border-black/30 pb-2">
               <span>Time Allowed: 1 Hour 15 Minutes</span>
-              <span className="font-bold">Total: {activeWorksheet?.totalMarks || 10} marks</span>
+              <span className="font-bold">Total: {activeWorksheet?.totalMarks || 0} marks</span>
             </div>
 
             {/* Questions List */}
@@ -429,68 +434,95 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                   </p>
                 </div>
               ) : (
-                worksheetQuestions.map((q, idx) => {
-                  const ans = answers.find((a) => a.questionId === q.id);
-                  return (
-                    <div key={q.id} className="text-[12px] font-serif leading-relaxed text-black">
-                      <div className="flex justify-between items-start font-bold font-sans text-[11px] mb-1.5 pb-1 border-b border-black/10">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[12px] font-bold">{idx + 1}.</span>
-                          <span className="font-sans font-medium text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
-                            {q.chapter}{q.subtopic ? ` • ${q.subtopic}` : ''}
-                          </span>
-                        </div>
-                        {q.marks && <span className="font-mono text-slate-800">[{q.marks} marks]</span>}
-                      </div>
-
-                      <div className="font-serif text-[12px] text-justify text-[#111827] pl-1 leading-relaxed">
-                        <MathRenderer content={cleanQuestionStem(q.textContent, q.questionNumber)} />
-                      </div>
-
-                      {q.diagramUrl && (
-                        <div className="my-3 flex justify-center">
-                          <img
-                            src={q.diagramUrl}
-                            alt={`Diagram for Question ${idx + 1}`}
-                            className="max-h-64 max-w-full object-contain border border-slate-200 rounded p-1 bg-white shadow-sm"
-                          />
-                        </div>
-                      )}
-
-                      {/* Marking Scheme Overlay if enabled */}
-                      {showMarkingScheme && ans && (
-                        <div className="mt-2.5 p-3 bg-[#f0fdf4] border border-[#86efac] rounded text-[11px] font-sans text-[#166534]">
-                          <div className="font-bold text-[10px] uppercase font-mono tracking-wide text-[#15803d] mb-1.5 flex items-center gap-1.5">
-                            <CheckCircle2 size={12} />
-                            <span>Official Cambridge Mark Scheme & Verbatim Working:</span>
+                <>
+                  {worksheetQuestions.slice(0, displayLimit).map((q, idx) => {
+                    const ans = answers.find((a) => a.questionId === q.id);
+                    return (
+                      <div key={q.id} className="text-[12px] font-serif leading-relaxed text-black">
+                        <div className="flex justify-between items-start font-bold font-sans text-[11px] mb-1.5 pb-1 border-b border-black/10">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[12px] font-bold">{idx + 1}.</span>
+                            <span className="font-sans font-medium text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
+                              {q.chapter}{q.subtopic ? ` • ${q.subtopic}` : ''}
+                            </span>
                           </div>
-                          <div className="text-black text-[11px] leading-relaxed">
-                            <MathRenderer content={ans.answerContent} />
-                          </div>
-                          {ans.diagramUrl && (
-                            <div className="my-2.5 flex justify-center">
-                              <img
-                                src={ans.diagramUrl}
-                                alt={`Mark Scheme Diagram for Question ${idx + 1}`}
-                                className="max-h-64 max-w-full object-contain border border-green-300 rounded p-1 bg-white shadow-sm"
-                              />
-                            </div>
-                          )}
-                          {ans.markSchemeNotes && (
-                            <div className="mt-2 text-[10px] italic text-[#14532d] border-t border-[#bbf7d0] pt-1.5">
-                              Examiner Notes: {ans.markSchemeNotes}
-                            </div>
-                          )}
+                          {q.marks && <span className="font-mono text-slate-800">[{q.marks} marks]</span>}
                         </div>
-                      )}
 
-                      {/* Monospace Citation Footnote */}
-                      <div className="mt-1.5 pl-1 text-[9px] font-mono text-[#6b7280]">
-                        CITATION: {q.provenance.citation}
+                        <div className="font-serif text-[12px] text-justify text-[#111827] pl-1 leading-relaxed">
+                          <MathRenderer content={cleanQuestionStem(q.textContent, q.questionNumber)} />
+                        </div>
+
+                        {q.diagramUrl && (
+                          <div className="my-3 flex justify-center">
+                            <img
+                              src={q.diagramUrl}
+                              alt={`Diagram for Question ${idx + 1}`}
+                              className="max-h-64 max-w-full object-contain border border-slate-200 rounded p-1 bg-white shadow-sm"
+                            />
+                          </div>
+                        )}
+
+                        {/* Marking Scheme Overlay if enabled */}
+                        {showMarkingScheme && ans && (
+                          <div className="mt-2.5 p-3 bg-[#f0fdf4] border border-[#86efac] rounded text-[11px] font-sans text-[#166534]">
+                            <div className="font-bold text-[10px] uppercase font-mono tracking-wide text-[#15803d] mb-1.5 flex items-center gap-1.5">
+                              <CheckCircle2 size={12} />
+                              <span>Official Cambridge Mark Scheme & Verbatim Working:</span>
+                            </div>
+                            <div className="text-black text-[11px] leading-relaxed">
+                              <MathRenderer content={ans.answerContent} />
+                            </div>
+                            {ans.diagramUrl && (
+                              <div className="my-2.5 flex justify-center">
+                                <img
+                                  src={ans.diagramUrl}
+                                  alt={`Mark Scheme Diagram for Question ${idx + 1}`}
+                                  className="max-h-64 max-w-full object-contain border border-green-300 rounded p-1 bg-white shadow-sm"
+                                />
+                              </div>
+                            )}
+                            {ans.markSchemeNotes && (
+                              <div className="mt-2 text-[10px] italic text-[#14532d] border-t border-[#bbf7d0] pt-1.5">
+                                Examiner Notes: {ans.markSchemeNotes}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Monospace Citation Footnote */}
+                        <div className="mt-1.5 pl-1 text-[9px] font-mono text-[#6b7280]">
+                          CITATION: {q.provenance.citation}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {worksheetQuestions.length > displayLimit && (
+                    <div className="no-print pt-6 pb-2 text-center border-t border-black/20 flex flex-col items-center gap-2">
+                      <p className="text-[11px] font-sans text-slate-600">
+                        Showing first {displayLimit} of {worksheetQuestions.length} questions in interactive preview.
+                        The complete compendium ({worksheetQuestions.length} questions) is included in full when downloading PDFs.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setDisplayLimit((prev) => Math.min(prev + 30, worksheetQuestions.length))}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded text-slate-800 text-xs font-semibold cursor-pointer transition-colors"
+                        >
+                          Load Next 30 Questions ({Math.min(displayLimit + 30, worksheetQuestions.length)} / {worksheetQuestions.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDisplayLimit(worksheetQuestions.length)}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-semibold cursor-pointer transition-colors"
+                        >
+                          Load All ({worksheetQuestions.length} Questions)
+                        </button>
                       </div>
                     </div>
-                  );
-                })
+                  )}
+                </>
               )}
             </div>
 

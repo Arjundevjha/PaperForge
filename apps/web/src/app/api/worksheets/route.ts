@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const store = getGlobalStore();
   (store as any).reloadFromDisk?.();
 
-  if (store.listWorksheets().length < 6 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
     await syncWorksheetsFromDb(store);
   }
   if (store.listQuestions().length <= 26 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const count = targetQuestionCount || Math.min(10, candidateQuestions.length);
+    const count = targetQuestionCount || candidateQuestions.length;
     const selectedQuestions = candidateQuestions.slice(0, count);
     const resolvedChapter = isAllTopics ? 'Promotional Exam Revision (All Topics)' : chapter;
 
