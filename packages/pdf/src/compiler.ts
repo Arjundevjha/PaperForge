@@ -143,8 +143,13 @@ export function sanitizeForPdf(input: string): string {
     .replace(/[\uf0a5]/g, 'inf')
     .replace(/[\uf0ce]/g, 'in')
     .replace(/[\uf0d0]/g, 'angle ')
-    .replace(/[\uf0e6\uf0e7\uf0e8]/g, '(')
-    .replace(/[\uf0f6\uf0f7\uf0f8]/g, ')')
+    .replace(/[\uf028\uf0e6\uf0e7\uf0e8]/g, '(')
+    .replace(/[\uf029\uf0f6\uf0f7\uf0f8]/g, ')')
+    .replace(/[\uf02b]/g, '+')
+    .replace(/[\uf02d]/g, '-')
+    .replace(/[\uf03d]/g, '=')
+    .replace(/[\uf03c]/g, '<')
+    .replace(/[\uf03e]/g, '>')
     .replace(/[\ue000-\uf8ff]/g, '')
     .replace(/[^\x20-\x7E\t\n]/g, '');
 }

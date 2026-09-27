@@ -79,8 +79,20 @@ const MathRenderer: React.FC<MathRendererProps> = ({
 
     return segments.map((seg, idx) => {
       if (seg.type === 'text') {
-        // Retain line breaks in text
-        return <span key={idx} className="whitespace-pre-wrap">{seg.value}</span>;
+        const paragraphs = seg.value.split(/\n\s*\n/);
+        return (
+          <span key={idx}>
+            {paragraphs.map((para, pIdx) => {
+              const inlineText = para.replace(/\n+/g, ' ').trim();
+              if (!inlineText) return null;
+              return (
+                <span key={pIdx} className={pIdx > 0 ? 'block mt-2' : 'inline'}>
+                  {inlineText}
+                </span>
+              );
+            })}
+          </span>
+        );
       }
 
       const isDisplay = seg.type === 'display-math';

@@ -21,8 +21,7 @@ export async function GET(request: Request) {
 
   const store = getGlobalStore();
 
-  // If store only has canonical seed questions (<= 26), synchronize all questions from PostgreSQL
-  if (store.listQuestions().length <= 26 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
     await syncAllQuestionsFromDb(store);
   }
 

@@ -25,6 +25,7 @@ import {
   Answer,
 } from '@paperforge/shared';
 import MathRenderer from '../ui/MathRenderer';
+import { sanitizeMathQuestionText } from '../../lib/sanitize-question';
 
 export interface TeacherResourceHubProps {
   activeSubject: SubjectId;
@@ -34,16 +35,8 @@ export interface TeacherResourceHubProps {
   onRefresh?: () => void;
 }
 
-function cleanQuestionStem(text: string, qnum?: string): string {
-  if (!text) return '';
-  let cleaned = text.trim();
-  if (qnum) {
-    const regex = new RegExp(`^(?:Question\\s*)?${qnum}[.:\\s]+`, 'i');
-    cleaned = cleaned.replace(regex, '');
-  } else {
-    cleaned = cleaned.replace(/^(?:Question\s*)?\d+[.:\s]+/i, '');
-  }
-  return cleaned.trim();
+function cleanQuestionStem(text: string, qnum?: string, qid?: string): string {
+  return sanitizeMathQuestionText(text, qnum, qid);
 }
 
 export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
@@ -419,8 +412,14 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
             </div>
 
             <div className="mt-2 flex justify-between text-[10px] font-sans text-[#374151] border-b border-black/30 pb-2">
-              <span>Time Allowed: 1 Hour 15 Minutes</span>
-              <span className="font-bold">Total: {activeWorksheet?.totalMarks || 0} marks</span>
+              <span>
+                {worksheetQuestions.length > 15
+                  ? 'Comprehensive Chapter Compendium • Self-Paced Topical Mastery'
+                  : 'Time Allowed: 1 Hour 30 Minutes'}
+              </span>
+              <span className="font-bold">
+                {activeWorksheet?.questionCount || worksheetQuestions.length} Questions • Total: {activeWorksheet?.totalMarks || 0} marks
+              </span>
             </div>
 
             {/* Questions List */}
@@ -450,7 +449,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                         </div>
 
                         <div className="font-serif text-[12px] text-justify text-[#111827] pl-1 leading-relaxed">
-                          <MathRenderer content={cleanQuestionStem(q.textContent, q.questionNumber)} />
+                          <MathRenderer content={cleanQuestionStem(q.textContent, q.questionNumber, q.id)} />
                         </div>
 
                         {q.diagramUrl && (
