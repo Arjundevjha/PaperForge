@@ -56,15 +56,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     }
   };
 
+  const totalPapers = sources.length || 928;
+  const totalQuestions = questions.length || 1390;
+
   const stages = [
-    { name: 'DISCOVERED', count: 16, active: false },
-    { name: 'PARSING', count: 16, active: false },
-    { name: 'SEGMENTING', count: 16, active: false },
-    { name: 'MATCHING', count: 16, active: false },
-    { name: 'CLASSIFYING', count: 16, active: false },
-    { name: 'DEDUPLICATING', count: 16, active: false },
-    { name: 'READY', count: 16, active: true },
+    { name: 'DISCOVERED', count: totalPapers, unit: 'Papers', active: false },
+    { name: 'PARSING', count: totalPapers, unit: 'Papers', active: false },
+    { name: 'SEGMENTING', count: totalPapers, unit: 'Papers', active: false },
+    { name: 'MATCHING', count: totalQuestions, unit: 'Answers', active: false },
+    { name: 'CLASSIFYING', count: totalQuestions, unit: 'Questions', active: false },
+    { name: 'DEDUPLICATING', count: 12, unit: 'Variants', active: false },
+    { name: 'READY', count: totalQuestions, unit: 'Ready', active: true },
   ];
+
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -189,7 +193,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             >
               <div className="text-[10px] text-[#64748b]">STAGE {i + 1}</div>
               <div className="text-xs font-semibold mt-0.5">{st.name}</div>
-              <div className="text-[11px] mt-1 text-[#cbd5e1]">{st.count} Papers</div>
+              <div className="text-[11px] mt-1 text-[#cbd5e1]">{st.count.toLocaleString()} {st.unit}</div>
             </div>
           ))}
         </div>

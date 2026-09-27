@@ -130,3 +130,43 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore): Promis
     return store.listQuestions().length;
   }
 }
+
+export async function syncWorksheetsFromDb(store: PaperForgeDataStore): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return store.listWorksheets().length;
+
+  try {
+    const { data, error } = await supabase
+      .from('worksheets')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      for (const w of data) {
+        if (!store.getWorksheetById(w.id)) {
+          store.addWorksheet({
+            id: w.id,
+            worksheetNumber: w.worksheet_number,
+            title: w.title,
+            subject: w.subject,
+            chapter: w.chapter,
+            syllabusVersionId: w.syllabus_version_id,
+            version: w.version,
+            questionCount: w.question_count,
+            totalMarks: w.total_marks,
+            status: w.status,
+            sourceCoverage: w.source_coverage || [],
+            manifest: w.manifest,
+            generatedAt: w.created_at,
+            updatedAt: w.updated_at,
+          });
+        }
+      }
+    }
+    return store.listWorksheets().length;
+  } catch (err) {
+    console.warn('Worksheets sync warning:', err);
+    return store.listWorksheets().length;
+  }
+}
+

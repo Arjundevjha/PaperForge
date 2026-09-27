@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getGlobalStore } from '@paperforge/db';
 import { SubjectIdSchema, Worksheet } from '@paperforge/shared';
 import { buildWorksheetManifest } from '@paperforge/worksheets';
+import { getSupabaseAdmin } from '../../../lib/supabase/admin';
+import { syncAllQuestionsFromDb, syncWorksheetsFromDb } from '../../../lib/supabase/db-sync';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -14,6 +16,14 @@ export async function GET(request: Request) {
 
   const store = getGlobalStore();
   (store as any).reloadFromDisk?.();
+
+  if (store.listWorksheets().length < 6 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    await syncWorksheetsFromDb(store);
+  }
+  if (store.listQuestions().length <= 26 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    await syncAllQuestionsFromDb(store);
+  }
+
   const worksheets = store.listWorksheets(parsed?.data);
 
   return NextResponse.json({
@@ -22,6 +32,7 @@ export async function GET(request: Request) {
     data: worksheets,
   });
 }
+
 
 export async function POST(request: Request) {
   try {
@@ -32,6 +43,10 @@ export async function POST(request: Request) {
     const parsedSubject = SubjectIdSchema.safeParse(subject);
     if (!parsedSubject.success) {
       return NextResponse.json({ error: 'Invalid subject identifier' }, { status: 400 });
+    }
+
+    if (store.listQuestions().length <= 26 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      await syncAllQuestionsFromDb(store);
     }
 
     const allQuestions = store.listQuestions({ subject: parsedSubject.data });
@@ -97,6 +112,30 @@ export async function POST(request: Request) {
 
     store.addWorksheet(newWorksheet);
 
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      try {
+        await supabase.from('worksheets').upsert({
+          id: newWorksheet.id,
+          worksheet_number: newWorksheet.worksheetNumber,
+          title: newWorksheet.title,
+          subject: newWorksheet.subject,
+          chapter: newWorksheet.chapter,
+          syllabus_version_id: newWorksheet.syllabusVersionId,
+          version: newWorksheet.version,
+          question_count: newWorksheet.questionCount,
+          total_marks: newWorksheet.totalMarks,
+          status: newWorksheet.status,
+          source_coverage: newWorksheet.sourceCoverage,
+          manifest: newWorksheet.manifest,
+          created_at: newWorksheet.generatedAt,
+          updated_at: newWorksheet.updatedAt,
+        }, { onConflict: 'id' });
+      } catch (dbErr) {
+        console.warn('Failed to persist worksheet to Supabase:', dbErr);
+      }
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -119,11 +158,18 @@ export async function DELETE(request: Request) {
 
     if (id) {
       const deleted = store.deleteWorksheet(id);
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        try {
+          await supabase.from('worksheets').delete().eq('id', id);
+        } catch {}
+      }
       return NextResponse.json({
         success: deleted,
         message: deleted ? `Worksheet ${id} deleted.` : `Worksheet ${id} not found.`,
       });
     }
+
 
     // Clear all worksheets
     const anyStore = store as any;

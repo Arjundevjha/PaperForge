@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getGlobalStore } from '@paperforge/db';
 import { compileWorksheetDocuments } from '@paperforge/worksheets';
+import { syncAllQuestionsFromDb, syncWorksheetsFromDb } from '../../../../../lib/supabase/db-sync';
 
 export async function GET(
   request: Request,
@@ -8,13 +9,20 @@ export async function GET(
 ) {
   const { id } = await params;
   const store = getGlobalStore();
-  const worksheet = store.getWorksheetById(id);
+  let worksheet = store.getWorksheetById(id);
+
+  if ((!worksheet || store.listQuestions().length <= 26) && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    await syncWorksheetsFromDb(store);
+    await syncAllQuestionsFromDb(store);
+    worksheet = store.getWorksheetById(id);
+  }
 
   if (!worksheet) {
     return NextResponse.json({ error: 'Worksheet not found' }, { status: 404 });
   }
 
   const { questions, answers } = store.getWorksheetQuestions(id);
+
 
   try {
     const { questionPdf } = await compileWorksheetDocuments(worksheet, questions, answers);
