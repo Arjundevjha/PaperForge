@@ -7,13 +7,13 @@ import { createServerSupabaseClient } from './supabase/server';
  * Strictly derives the user role: ADMIN if matching admin email, otherwise assigned role.
  */
 export async function getCurrentUser(): Promise<UserProfile | null> {
-  const supabase = await createServerSupabaseClient();
-
-  if (!supabase) {
-    return null;
-  }
-
   try {
+    const supabase = await createServerSupabaseClient();
+
+    if (!supabase) {
+      return null;
+    }
+
     const {
       data: { user },
       error,

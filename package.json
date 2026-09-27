@@ -34,6 +34,7 @@
   "author": "PaperForge Team",
   "license": "UNLICENSED",
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.47.0",
     "pdf-lib": "^1.17.1",

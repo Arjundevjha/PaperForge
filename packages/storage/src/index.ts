@@ -11,7 +11,7 @@ export * from './supabase-provider';
 let cachedProvider: StorageProvider | null = null;
 
 function ensureEnvLoaded() {
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY) return;
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NODE_ENV === 'production') return;
   const candidates = [
     path.resolve(process.cwd(), '.env.local'),
     path.resolve(process.cwd(), 'apps', 'web', '.env.local'),

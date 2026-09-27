@@ -306,6 +306,10 @@ export class PaperForgeDataStore {
     return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  getReviewItemById(id: string): ReviewItem | undefined {
+    return this.reviewItems.get(id);
+  }
+
   addReviewItem(item: ReviewItem): ReviewItem {
     this.reviewItems.set(item.id, item);
     this.saveToDisk();

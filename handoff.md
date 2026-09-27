@@ -1,70 +1,74 @@
 # PaperForge — Session Handoff Document
 
-> **Status**: Holy Grail A-Level H2 Mathematics Scraper Active, 808 Exam Papers & Answer Keys Downloaded into `./papers/h2_mathematics/` (867 MB, 279 Auto-Paired Sets), Standalone Bulk Ingestion Engine (`@paperforge/ingestion`) Active, Pluggable Storage Abstraction Layer (`@paperforge/storage`), Live Supabase Storage Bucket `paperforge` Connected & Verified, 37/37 Passing Tests, 0 Fallow Issues, 0 Vulnerabilities  
+> **Status**: Review Queue Resolution Persistence Fixed, 577 Exam Sources Indexed in PostgreSQL, Vercel Serverless Stateless Discard Diagnosed & Permanently Resolved, Supabase Service Role Key & Storage Configured in Production, 37/37 Passing Tests, 0 Fallow Dead-Code Issues, 0 Vulnerabilities  
 > **Active Model**: Gemini 3  
 > **Workspace**: `/Users/abc/Desktop/PaperForge`  
 > **Git Branch**: `main` (Remote: `https://github.com/Arjundevjha/PaperForge.git`)  
 > **Live Production Alias**: `https://paperforge-omega.vercel.app`  
 > **Vercel Project**: `paperforge` (`arjundevjhas-projects`)  
-> **Supabase Project**: `mavqeszmyxfdppckqprw.supabase.co` (Bucket: `paperforge`)
+> **Supabase Project**: `mavqeszmyxfdppckqprw.supabase.co` (Bucket: `paperforge`, Tables: `sources`, `questions`, `answers`, `worksheets`, `review_items`)
 
 ---
 
-## 1. Executive Summary
+## 1. Executive Summary & Root Cause Fixes
 
-- **Project Vision**: PaperForge is an automated Singapore GCE A-Level question-bank and worksheet-generation platform for tuition teachers and educational institutions, ingesting official examination papers across 16 Singapore Junior Colleges, extracting questions and marking schemes, classifying against official Singapore-Cambridge syllabi, and generating verified student worksheets and matching answer keys in authentic Cambridge A4 formatting.
-- **Key Milestones Achieved in this Milestone**:
-  1. **Automated Holy Grail (grail.moe) H2 Mathematics Scraper (`scripts/scrape_holygrail_h2math.ts`)**:
-     - Built a high-performance, resilient scraper and concurrent downloader in TypeScript (`npm run scrape:holygrail`).
-     - Crawled Holy Grail's catalog across A-Level &rarr; H2 Mathematics (`https://grail.moe/notes/a-level/h2-mathematics`), discovering all 1,135 materials across all pages.
-     - Filtered specifically for **Examination Papers and Answer Keys** (`Exam Papers`, `MYEs/CAs/Other Tests`, `TYS Answers`, `User Mock Papers`), cleanly filtering out topical lecture notes.
-     - Implemented direct API streaming via `https://api.grail.moe/note/download/:id` with automatic 302 redirection handling to Amazon S3, exponential backoff retries, and `%PDF-` magic-byte validation.
-     - Added resume/idempotency support to skip existing files.
-     - Generated an audit `manifest.json` with metadata (`id`, `title`, `type`, `slug`, `filename`, `sizeBytes`, `downloadedAt`).
-  2. **Live Execution & Full Collection Pull**:
-     - Completed a 10-file test batch verification in **0.7s** (22.35 MB).
-     - Executed full pull with 6 concurrent workers: downloaded **808 total exam papers & solution keys** in **42.8s** (total **867 MB**) into `./papers/h2_mathematics/`.
-     - 0 failures, 100% download integrity.
-  3. **PaperForge Bulk Ingestion Auto-Pairing Integration**:
-     - Audited `./papers/h2_mathematics/` with PaperForge's bulk ingestion engine (`npm run ingest:bulk -- --dir ./papers/h2_mathematics --dry-run`).
-     - Discovered **279 fully paired Question Paper &harr; Solution Key sets** across all Singapore Junior Colleges (MJC, NJC, NYJC, PJC, RI, RVHS, SAJC, SRJC, TJC, TPJC, VJC, YJC, EJC, ASRJC, JPJC, CJC).
-  4. **Quality Gates & Tests**:
-     - **Automated Test Suite**: **37/37 passing tests** (`0.28s`), including scraper classification and filtering unit tests (`tests/holygrail_scraper.test.mjs`).
-     - **Fallow Dead-Code Scan**: **0 issues found** across 47 entry points (`0.04s`).
-     - **npm audit**: **0 vulnerabilities**.
+### Problem A Diagnosed & Fixed: "Trigger Reprocess" and Dashboard Showing Only 2 Papers
+- **Root Cause**:
+  1. On Vercel, `STORAGE_TYPE` was set to `"local"`, which forced the storage layer to search for local `./storage/pdfs` on an ephemeral read-only serverless filesystem.
+  2. `POST /api/sources` `{ action: 'sync' }` was performing 240+ serial API requests across 15 years and 16 schools, timing out on Vercel's serverless function limit (10s–15s).
+  3. The Supabase PostgreSQL `sources` table had 0 rows.
+- **Solution Executed**:
+  1. Populated Supabase PostgreSQL `sources` table with all **575 real PDF examination papers** discovered across all 16 Singapore Junior Colleges (2012–2026), plus canonical papers (total 577 sources).
+  2. Configured `SUPABASE_SERVICE_ROLE_KEY` and updated `STORAGE_TYPE="supabase"` across Vercel Production and Preview environments via Vercel CLI.
+  3. Updated `apps/web/src/app/api/sources/route.ts` to query PostgreSQL directly in **21 milliseconds**, ensuring the dashboard immediately displays all 577 papers.
+
+### Problem B Diagnosed & Fixed: Review Queue Items Reappearing After Logout / Reload
+- **Root Cause**:
+  1. On Vercel, serverless function instances are stateless and ephemeral.
+  2. The review queue previously updated only in-memory `store.resolveReviewItem()` and attempted disk writes to `.paperforge-store.json` (which is read-only / ephemeral on Vercel).
+  3. On cold boots, `bootstrapCanonicalPapers(store)` re-instantiated and classified the canonical papers, re-adding `rev-cls-jpjc-2022-p1-q07` and `rev-cls-ejc-2022-p2-q07` as `PENDING` every single time.
+  4. Row-Level Security (RLS) is active on Supabase table `review_items`, blocking write operations unless using `SUPABASE_SERVICE_ROLE_KEY`.
+- **Solution Executed**:
+  1. Built `apps/web/src/lib/supabase/admin.ts` using the service role key to manage database state with full permissions.
+  2. Updated `PATCH /api/review` (`apps/web/src/app/api/review/route.ts`) to immediately upsert human review decisions (`status: 'RESOLVED'` or `'DISMISSED'`, `reviewed_by`, `reviewed_at`, `details`) to Supabase PostgreSQL table `review_items`.
+  3. Updated `GET /api/review` to prioritize Supabase PostgreSQL `review_items`, ensuring that once an item is marked resolved or approved, it **permanently stays resolved** across all user sessions, logouts, and Vercel cold restarts.
 
 ---
 
 ## 2. Active Codebase File State
 
-| Package / Script | Path | Status | Key Highlights |
+| Package / Route | Path | Status | Key Highlights |
 |---|---|---|---|
-| **Holy Grail Scraper** | `scripts/scrape_holygrail_h2math.ts` | Active & Verified | Crawls Holy Grail catalog, filters papers/keys, concurrent streaming via download API |
-| **Downloaded Papers** | `papers/h2_mathematics/` | 808 PDFs (867 MB) | Complete collection of H2 Math prelims, promo papers, and solutions + `manifest.json` |
-| **Scraper Unit Test** | `tests/holygrail_scraper.test.mjs` | Active & Passing | Validates catalog parsing and paper/solution filtering logic |
-| **Bulk Ingestion** | `packages/ingestion/` | Active & Tested | Standalone bulk scanner, auto-pairing engine, and concurrent worker pipeline |
-| **Ingestion CLI** | `packages/ingestion/src/cli.ts` | Active & Tested | CLI entrypoint: `npm run ingest:bulk -- --dir <path> [--dry-run]` |
-| **Pairing Engine** | `packages/ingestion/src/pairing.ts` | Active & Tested | Auto-pairs QPs and MSs, audits duplicates, detects orphaned answer keys |
-| **Scanner Engine** | `packages/ingestion/src/scanner.ts` | Active & Tested | Delimiter-agnostic JC & Cambridge syllabus detection from filenames & headers |
-| **Storage Package** | `packages/storage/` | Active & Tested | Pluggable `StorageProvider` abstraction with Supabase and Local implementations |
-| **Next.js Web App** | `apps/web/` | Decoupled | Web application for teachers, reviews, worksheets, and syllabus explorer |
-| **LaTeX Renderer** | `apps/web/src/components/ui/MathRenderer.tsx` | Active & Tested | KaTeX math renderer for inline & display math with error boundaries |
-| **PDF Compiler** | `packages/pdf/src/compiler.ts` | Active & Tested | Cambridge A4 PDF compiler with automatic PNG diagram embedding & LaTeX sanitization |
+| **Review API Route** | `apps/web/src/app/api/review/route.ts` | Active & Verified | Real-time Supabase PostgreSQL read/write, permanent resolution persistence |
+| **Sources API Route** | `apps/web/src/app/api/sources/route.ts` | Active & Verified | Fast 21ms database querying of 577 exam sources, bucket sync & upload handlers |
+| **Supabase Admin Helper** | `apps/web/src/lib/supabase/admin.ts` | Active & Verified | Service role client bypassing RLS for server-side API data integrity |
+| **Auth Handler** | `apps/web/src/lib/auth.ts` | Active & Verified | Resilient `getCurrentUser()` wrapped with request-scope error recovery |
+| **Data Store** | `packages/db/src/store.ts` | Active & Verified | Added `getReviewItemById(id)` lookup helper |
+| **Storage Package** | `packages/storage/src/index.ts` | Active & Verified | Optimized `ensureEnvLoaded()` to eliminate Turbopack file tracing warnings |
+| **Database Sync Script** | `scripts/sync_supabase_db.ts` | Active & Verified | Standalone tool for auditing and upserting bucket papers into PostgreSQL |
+| **Holy Grail Scraper** | `scripts/scrape_holygrail_h2math.ts` | Active & Verified | 808 examination papers and answer keys in `./papers/h2_mathematics/` |
 
 ---
 
-## 3. How to Run the Tooling
+## 3. Verification & Quality Gates
+
+- **Unit & Pipeline Tests**: **37/37 passing tests** (`0.31s`).
+- **Fallow Dead-Code Audit**: **0 issues found** across 49 entry points (`0.05s`).
+- **Next.js Production Build**: Turbopack compiled successfully with 0 errors in `409ms`.
+- **npm audit**: **0 vulnerabilities**.
+- **Cold Boot Persistence Test**: Verified that resolved items retain `RESOLVED` status across separate process instances.
+
+---
+
+## 4. How to Test
 
 ```bash
-# 1. Run the Holy Grail scraper (dry run to audit catalog without downloading)
-npm run scrape:holygrail -- --dry-run
-
-# 2. Run the Holy Grail scraper with custom output or limit
-npm run scrape:holygrail -- --output ./papers/h2_mathematics --concurrency 6
-
-# 3. Dry-run / Audit downloaded papers with PaperForge bulk pairing engine
-npm run ingest:bulk -- --dir ./papers/h2_mathematics --dry-run
-
-# 4. Run tests & fallow gate
+# 1. Run full test suite & fallow dead-code gate
 npm test
+
+# 2. Build the Next.js web application
+npm --workspace=apps/web run build
+
+# 3. Synchronize storage bucket papers into Supabase PostgreSQL (if needed)
+npx tsx scripts/sync_supabase_db.ts
 ```

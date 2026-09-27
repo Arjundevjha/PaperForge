@@ -22,6 +22,7 @@ import {
 import { hashNormalizedText, computeVisualHash } from '@paperforge/dedup';
 import { classifyQuestionContent } from '@paperforge/classification';
 import { getStorageProvider } from '@paperforge/storage';
+import { getSupabaseAdmin } from '../../../lib/supabase/admin';
 
 const execFileAsync = promisify(execFile);
 
@@ -35,6 +36,49 @@ function getWorkerScriptPath(): string {
     curr = path.dirname(curr);
   }
   return path.resolve(process.cwd(), 'scripts/extract_pdf_worker.py');
+}
+
+async function loadSourcesFromDbOrBucket(store: any): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    try {
+      const { data: dbSources, error } = await supabase
+        .from('sources')
+        .select('*')
+        .order('year', { ascending: false });
+
+      if (!error && Array.isArray(dbSources) && dbSources.length > 0) {
+        let loaded = 0;
+        for (const s of dbSources) {
+          if (!store.getSourceById(s.id)) {
+            store.addSource({
+              id: s.id,
+              filename: s.filename,
+              school: s.school,
+              year: s.year,
+              subject: s.subject,
+              paperType: s.paper_type,
+              paperNumber: s.paper_number,
+              sourceHash: s.source_hash,
+              storageKey: s.storage_key,
+              pageCount: s.page_count,
+              status: s.status,
+              errorMessage: s.error_message,
+              createdAt: s.created_at,
+              updatedAt: s.updated_at,
+            });
+            loaded++;
+          }
+        }
+        return loaded;
+      }
+    } catch (err) {
+      console.warn('Database sources lookup warning:', err);
+    }
+  }
+
+  // Fallback to bucket traversal if DB is empty
+  return syncBucketSourcesToStore(store);
 }
 
 async function syncBucketSourcesToStore(store: any): Promise<number> {
@@ -91,12 +135,11 @@ async function syncBucketSourcesToStore(store: any): Promise<number> {
 
 export async function GET() {
   const store = getGlobalStore();
-  (store as any).reloadFromDisk?.();
   let sources = store.listSources();
 
-  // If store only has canonical seed papers (<= 2), attempt automatic bucket discovery
-  if (sources.length <= 2 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    await syncBucketSourcesToStore(store);
+  // If store has fewer than 100 sources, synchronize from Supabase PostgreSQL
+  if (sources.length < 100 && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    await loadSourcesFromDbOrBucket(store);
     sources = store.listSources();
   }
 
@@ -129,11 +172,11 @@ export async function POST(request: Request) {
       }
 
       if (body.action === 'sync' || body.action === 'reprocess') {
-        const added = await syncBucketSourcesToStore(store);
+        const added = await loadSourcesFromDbOrBucket(store);
         const currentSources = store.listSources();
         return NextResponse.json({
           success: true,
-          message: `Successfully synchronized ${added} new papers from bucket (total: ${currentSources.length} sources).`,
+          message: `Successfully synchronized sources (total: ${currentSources.length} sources).`,
           count: currentSources.length,
           data: currentSources,
         });
@@ -391,6 +434,29 @@ export async function POST(request: Request) {
       const result = ingestPaperPackage(store, dynamicPackage);
       const durationMs = Date.now() - startTime;
 
+      const supabase = getSupabaseAdmin();
+      if (supabase && dynamicPackage.source) {
+        try {
+          await supabase.from('sources').upsert({
+            id: dynamicPackage.source.id,
+            filename: dynamicPackage.source.filename,
+            school: dynamicPackage.source.school,
+            year: dynamicPackage.source.year,
+            subject: dynamicPackage.source.subject,
+            paper_type: dynamicPackage.source.paperType,
+            paper_number: dynamicPackage.source.paperNumber,
+            source_hash: dynamicPackage.source.sourceHash,
+            storage_key: dynamicPackage.source.storageKey,
+            page_count: dynamicPackage.source.pageCount,
+            status: dynamicPackage.source.status,
+            created_at: dynamicPackage.source.createdAt,
+            updated_at: dynamicPackage.source.updatedAt,
+          }, { onConflict: 'source_hash' });
+        } catch (dbErr) {
+          console.warn('Failed to sync uploaded source to Supabase:', dbErr);
+        }
+      }
+
       return NextResponse.json(
         {
           ...result,
@@ -421,11 +487,17 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const store = getGlobalStore();
+  const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 
   if (id) {
     const deleted = store.deleteSource(id);
+    if (supabase) {
+      try {
+        await supabase.from('sources').delete().eq('id', id);
+      } catch {}
+    }
     return NextResponse.json({
       success: deleted,
       message: deleted ? `Source ${id} deleted.` : `Source ${id} not found.`,
