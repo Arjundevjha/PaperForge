@@ -193,3 +193,131 @@ export async function syncWorksheetsFromDb(store: PaperForgeDataStore, force = f
   }
 }
 
+export async function reclassifyQuestionInDb(
+  store: PaperForgeDataStore,
+  questionId: string,
+  chapter: string,
+  subtopic?: string | null,
+  status?: Question['status']
+): Promise<{
+  question: Question | undefined;
+  movedFromWorksheet?: string;
+  movedToWorksheet?: string;
+}> {
+  const existing = store.getQuestionById(questionId);
+  const oldChapter = existing?.chapter;
+
+  const updatedQuestion = store.updateQuestion(questionId, {
+    chapter,
+    subtopic: subtopic || undefined,
+    ...(status ? { status } : {}),
+  });
+
+  let movedFromWorksheet: string | undefined;
+  let movedToWorksheet: string | undefined;
+
+  // If chapter changed, move question between worksheets in the in-memory store
+  if (oldChapter && oldChapter.toLowerCase() !== chapter.toLowerCase()) {
+    const allWorksheets = store.listWorksheets();
+    const oldWs = allWorksheets.find((w) => w.chapter.toLowerCase() === oldChapter.toLowerCase());
+    const newWs = allWorksheets.find((w) => w.chapter.toLowerCase() === chapter.toLowerCase());
+
+    if (oldWs && newWs) {
+      store.moveQuestionBetweenWorksheets(questionId, oldWs.id, newWs.id);
+      movedFromWorksheet = oldWs.worksheetNumber;
+      movedToWorksheet = newWs.worksheetNumber;
+    }
+  }
+
+  // Synchronize directly to Supabase PostgreSQL if configured
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    try {
+      const nowIso = new Date().toISOString();
+      const updates: Record<string, any> = {
+        chapter,
+        updated_at: nowIso,
+      };
+      if (subtopic !== undefined) updates.subtopic = subtopic;
+      if (status) updates.status = status;
+
+      await supabase.from('questions').update(updates).eq('id', questionId);
+
+      if (oldChapter && oldChapter.toLowerCase() !== chapter.toLowerCase()) {
+        const { data: wsRows } = await supabase
+          .from('worksheets')
+          .select('id, chapter, worksheet_number, question_count, total_marks')
+          .in('chapter', [oldChapter, chapter]);
+
+        if (wsRows && wsRows.length > 0) {
+          const oldWsRow = wsRows.find((w) => w.chapter.toLowerCase() === oldChapter.toLowerCase());
+          const newWsRow = wsRows.find((w) => w.chapter.toLowerCase() === chapter.toLowerCase());
+
+          if (oldWsRow) {
+            await supabase
+              .from('worksheet_questions')
+              .delete()
+              .eq('worksheet_id', oldWsRow.id)
+              .eq('question_id', questionId);
+
+            const { count: remainingCount } = await supabase
+              .from('worksheet_questions')
+              .select('*', { count: 'exact', head: true })
+              .eq('worksheet_id', oldWsRow.id);
+
+            await supabase
+              .from('worksheets')
+              .update({
+                question_count: remainingCount ?? Math.max(0, (oldWsRow.question_count || 1) - 1),
+                total_marks: Math.max(0, (oldWsRow.total_marks || 0) - (existing?.marks || 0)),
+                updated_at: nowIso,
+              })
+              .eq('id', oldWsRow.id);
+          }
+
+          if (newWsRow) {
+            const { data: posData } = await supabase
+              .from('worksheet_questions')
+              .select('position')
+              .eq('worksheet_id', newWsRow.id)
+              .order('position', { ascending: false })
+              .limit(1);
+
+            const nextPos = (posData?.[0]?.position || 0) + 1;
+
+            await supabase
+              .from('worksheet_questions')
+              .upsert({
+                worksheet_id: newWsRow.id,
+                question_id: questionId,
+                position: nextPos,
+              });
+
+            const { count: newCount } = await supabase
+              .from('worksheet_questions')
+              .select('*', { count: 'exact', head: true })
+              .eq('worksheet_id', newWsRow.id);
+
+            await supabase
+              .from('worksheets')
+              .update({
+                question_count: newCount ?? ((newWsRow.question_count || 0) + 1),
+                total_marks: (newWsRow.total_marks || 0) + (existing?.marks || 0),
+                updated_at: nowIso,
+              })
+              .eq('id', newWsRow.id);
+          }
+        }
+      }
+    } catch (dbErr) {
+      console.error('Supabase reclassifyQuestionInDb error:', dbErr);
+    }
+  }
+
+  return {
+    question: updatedQuestion,
+    movedFromWorksheet,
+    movedToWorksheet,
+  };
+}
+

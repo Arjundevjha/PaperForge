@@ -245,6 +245,19 @@ export class PaperForgeDataStore {
     return question;
   }
 
+  updateQuestion(id: string, updates: Partial<Question>): Question | undefined {
+    const q = this.questions.get(id);
+    if (!q) return undefined;
+    const updated: Question = {
+      ...q,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.questions.set(id, updated);
+    this.saveToDisk();
+    return updated;
+  }
+
   addQuestions(questions: Question[]): void {
     for (const q of questions) {
       this.questions.set(q.id, q);
@@ -316,6 +329,32 @@ export class PaperForgeDataStore {
     }
 
     return { questions, answers };
+  }
+
+  moveQuestionBetweenWorksheets(questionId: string, fromWorksheetId: string, toWorksheetId: string): boolean {
+    const fromWs = this.worksheets.get(fromWorksheetId);
+    const toWs = this.worksheets.get(toWorksheetId);
+    const q = this.questions.get(questionId);
+    if (!fromWs || !toWs || !q) return false;
+
+    // Remove from fromWs
+    fromWs.manifest.questions = fromWs.manifest.questions.filter((id) => id !== questionId);
+    fromWs.questionCount = fromWs.manifest.questions.length;
+    fromWs.totalMarks = Math.max(0, fromWs.totalMarks - (q.marks || 0));
+    fromWs.manifest.totalMarks = fromWs.totalMarks;
+    fromWs.updatedAt = new Date().toISOString();
+
+    // Add to toWs if not already present
+    if (!toWs.manifest.questions.includes(questionId)) {
+      toWs.manifest.questions.push(questionId);
+      toWs.questionCount = toWs.manifest.questions.length;
+      toWs.totalMarks = toWs.totalMarks + (q.marks || 0);
+      toWs.manifest.totalMarks = toWs.totalMarks;
+      toWs.updatedAt = new Date().toISOString();
+    }
+
+    this.saveToDisk();
+    return true;
   }
 
   // Review Queue

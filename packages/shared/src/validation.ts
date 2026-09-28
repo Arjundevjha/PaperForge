@@ -71,3 +71,14 @@ export const ReviewResolutionPayloadSchema = z
   .refine((data) => Boolean(data.id || data.reviewItemId), {
     message: 'Either id or reviewItemId must be provided',
   });
+
+export const QuestionReclassifyPayloadSchema = z.object({
+  questionId: z.string().min(1),
+  chapter: z.string().min(1),
+  subtopic: z.string().optional().nullable(),
+  status: z.enum(['DRAFT', 'READY', 'PUBLISHED', 'FLAGGED', 'EXCLUDED']).optional(),
+  notes: z.string().optional(),
+});
+
+export type QuestionReclassifyPayload = z.infer<typeof QuestionReclassifyPayloadSchema>;
+

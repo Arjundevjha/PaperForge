@@ -15,6 +15,9 @@ import {
   ZoomOut,
   ToggleLeft,
   ToggleRight,
+  Edit3,
+  Tag,
+  X,
 } from 'lucide-react';
 import {
   SubjectId,
@@ -26,6 +29,8 @@ import {
 } from '@paperforge/shared';
 import MathRenderer from '../ui/MathRenderer';
 import { sanitizeMathQuestionText } from '../../lib/sanitize-question';
+import { ReclassifyModal } from '../questions/ReclassifyModal';
+
 
 export interface TeacherResourceHubProps {
   activeSubject: SubjectId;
@@ -57,6 +62,9 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
   const [previewZoom, setPreviewZoom] = useState<number>(100);
   const [generating, setGenerating] = useState<boolean>(false);
   const [displayLimit, setDisplayLimit] = useState<number>(30);
+  const [reclassifyingQuestion, setReclassifyingQuestion] = useState<Question | null>(null);
+  const [reclassifyNotification, setReclassifyNotification] = useState<string | null>(null);
+  const [optimisticOverrides, setOptimisticOverrides] = useState<Map<string, Question>>(new Map());
 
   useEffect(() => {
     setDisplayLimit(30);
@@ -76,12 +84,13 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
   const activeWorksheet =
     filteredWorksheets.find((w) => w.id === selectedWorksheetId) || filteredWorksheets[0] || null;
 
-  // Questions for preview
+  // Questions for preview with optimistic reclassification overrides
   const worksheetQuestions = activeWorksheet?.manifest?.questions
     ? (activeWorksheet.manifest.questions
-        .map((qid) => questions.find((q) => q.id === qid))
+        .map((qid) => optimisticOverrides.get(qid) || questions.find((q) => q.id === qid))
         .filter(Boolean) as Question[])
     : [];
+
 
   const handleGenerateForChapter = async (chapterName: string) => {
     try {
@@ -424,6 +433,23 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
 
             {/* Questions List */}
             <div className="mt-5 space-y-6">
+              {reclassifyNotification && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center justify-between text-xs text-emerald-900 shadow-sm animate-in fade-in-0 duration-150">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                    <span>{reclassifyNotification}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReclassifyNotification(null)}
+                    className="text-emerald-700 hover:text-emerald-900 p-0.5"
+                    aria-label="Dismiss notification"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               {!activeWorksheet || worksheetQuestions.length === 0 ? (
                 <div className="py-20 text-center text-[#64748b] font-sans text-xs space-y-2">
                   <FileText size={32} className="mx-auto text-[#94a3b8] mb-1" />
@@ -441,9 +467,16 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                         <div className="flex justify-between items-start font-bold font-sans text-[11px] mb-1.5 pb-1 border-b border-black/10">
                           <div className="flex items-center gap-2">
                             <span className="text-[12px] font-bold">{idx + 1}.</span>
-                            <span className="font-sans font-medium text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
-                              {q.chapter}{q.subtopic ? ` • ${q.subtopic}` : ''}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setReclassifyingQuestion(q)}
+                              title="Click to reclassify chapter or subtopic"
+                              className="font-sans font-medium text-[9px] px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 hover:border-slate-400 transition-all inline-flex items-center gap-1 group cursor-pointer shadow-2xs"
+                            >
+                              <Tag size={9} className="text-slate-400 group-hover:text-primary-cyan transition-colors" />
+                              <span>{q.chapter}{q.subtopic ? ` • ${q.subtopic}` : ''}</span>
+                              <Edit3 size={9} className="opacity-0 group-hover:opacity-100 text-slate-600 transition-opacity ml-0.5" />
+                            </button>
                           </div>
                           {q.marks && <span className="font-mono text-slate-800">[{q.marks} marks]</span>}
                         </div>
@@ -567,7 +600,32 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Interactive Question Reclassification Modal */}
+        <ReclassifyModal
+          isOpen={!!reclassifyingQuestion}
+          onClose={() => setReclassifyingQuestion(null)}
+          question={reclassifyingQuestion}
+          onReclassified={(updated, movedFrom, movedTo) => {
+            setOptimisticOverrides((prev) => {
+              const next = new Map(prev);
+              next.set(updated.id, updated);
+              return next;
+            });
+
+            let msg = `Question ${updated.questionNumber} (${updated.provenance.citation}) reclassified to ${updated.chapter}${updated.subtopic ? ` • ${updated.subtopic}` : ''}.`;
+            if (movedTo && activeWorksheet && movedTo !== activeWorksheet.worksheetNumber) {
+              msg += ` Automatically transferred from ${activeWorksheet.worksheetNumber} to ${movedTo}.`;
+            }
+            setReclassifyNotification(msg);
+
+            if (onRefresh) {
+              onRefresh();
+            }
+          }}
+        />
       </div>
     </div>
   );
 };
+

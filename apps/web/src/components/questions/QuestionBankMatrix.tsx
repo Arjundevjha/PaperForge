@@ -6,6 +6,8 @@ import {
   Layers,
   FileText,
   CheckCircle2,
+  Tag,
+  Edit3,
 } from 'lucide-react';
 import {
   Question,
@@ -15,6 +17,7 @@ import {
   SingaporeSchoolCode,
 } from '@paperforge/shared';
 import MathRenderer from '../ui/MathRenderer';
+import { ReclassifyModal } from './ReclassifyModal';
 
 export interface QuestionBankMatrixProps {
   questions: Question[];
@@ -27,34 +30,40 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
   answers,
   activeSubject,
 }) => {
+  const [localQuestions, setLocalQuestions] = useState<Question[]>(questions);
   const [search, setSearch] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedSchool, setSelectedSchool] = useState<string>('all');
   const [selectedChapter, setSelectedChapter] = useState<string>('all');
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
+  const [reclassifyingQuestion, setReclassifyingQuestion] = useState<Question | null>(null);
+
+  useEffect(() => {
+    setLocalQuestions(questions);
+  }, [questions]);
 
   // Sync selectedSubject if activeSubject changes and is not 'all'
   useEffect(() => {
     if (activeSubject && selectedSubject === 'all') {
       // Check if questions has activeSubject
-      const hasSubjectQuestions = questions.some((q) => q.subject === activeSubject);
+      const hasSubjectQuestions = localQuestions.some((q) => q.subject === activeSubject);
       if (hasSubjectQuestions) {
         setSelectedSubject(activeSubject);
       }
     }
-  }, [activeSubject, questions, selectedSubject]);
+  }, [activeSubject, localQuestions, selectedSubject]);
 
   const availableChapters = React.useMemo(() => {
     const chaptersSet = new Set<string>();
-    for (const q of questions) {
+    for (const q of localQuestions) {
       if (selectedSubject === 'all' || q.subject === selectedSubject) {
         if (q.chapter) chaptersSet.add(q.chapter);
       }
     }
     return Array.from(chaptersSet).sort();
-  }, [questions, selectedSubject]);
+  }, [localQuestions, selectedSubject]);
 
-  const filtered = questions.filter((q) => {
+  const filtered = localQuestions.filter((q) => {
     if (selectedSubject !== 'all' && q.subject !== selectedSubject) return false;
     if (selectedChapter !== 'all' && q.chapter !== selectedChapter) return false;
     if (selectedSchool !== 'all' && q.provenance.school !== selectedSchool) return false;
@@ -293,6 +302,24 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
               <div className="mt-1 font-mono text-xs text-[#94a3b8]">
                 {selectedQuestion.provenance.citation}
               </div>
+
+              {/* Syllabus Classification & Reclassify Trigger */}
+              <div className="mt-3 flex items-center justify-between p-3 rounded-lg bg-surface-2 border border-border-subdued">
+                <div>
+                  <div className="text-[10px] font-mono uppercase text-[#64748b]">Syllabus Classification</div>
+                  <div className="text-xs font-semibold text-primary-cyan mt-0.5">
+                    {selectedQuestion.chapter} {selectedQuestion.subtopic ? `• ${selectedQuestion.subtopic}` : ''}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReclassifyingQuestion(selectedQuestion)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-1 hover:bg-surface-3 text-xs font-medium text-[#f1f5f9] border border-border-active hover:border-primary-cyan transition-all shadow-2xs cursor-pointer"
+                >
+                  <Tag size={13} className="text-primary-cyan" />
+                  <span>Reclassify</span>
+                </button>
+              </div>
             </div>
 
             {/* Stored Text Content */}
@@ -368,6 +395,22 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
           </div>
         )}
       </div>
+
+      {/* Interactive Question Reclassification Modal */}
+      <ReclassifyModal
+        isOpen={!!reclassifyingQuestion}
+        onClose={() => setReclassifyingQuestion(null)}
+        question={reclassifyingQuestion}
+        onReclassified={(updated) => {
+          setLocalQuestions((prev) =>
+            prev.map((q) => (q.id === updated.id ? updated : q))
+          );
+          if (selectedQuestion?.id === updated.id) {
+            setSelectedQuestion(updated);
+          }
+        }}
+      />
     </div>
   );
 };
+

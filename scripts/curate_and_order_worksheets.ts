@@ -42,6 +42,7 @@ const CURATED_QUESTIONS: Record<string, string> = {
   'nyjc-2012-p1-q02': `The vectors $\\mathbf{a}$ and $\\mathbf{b}$ are given by $\\mathbf{a} = (\\sin \\theta)\\mathbf{i} + (\\cos \\theta)\\mathbf{j} + \\mathbf{k}$ and $\\mathbf{b} = (\\sin \\phi)\\mathbf{i} + (\\cos \\phi)\\mathbf{j} + \\mathbf{k}$, where $0 \\le \\theta \\le \\phi \\le \\pi$.\n\nFind an expression for $\\mathbf{a} \\times \\mathbf{b}$ in terms of $\\delta$, where $\\delta = \\frac{1}{2}(\\phi - \\theta)$. [5]\n\nDeduce that the angle $\\alpha$ between $\\mathbf{a}$ and $\\mathbf{b}$ is given by $\\sin \\frac{\\alpha}{2} = \\sin \\delta \\sqrt{1 + \\cos^2 \\delta}$. [2]`,
   'vjc-2012-p2-q01': `The complex number $z$ satisfies $\\arg(z - 1 - 2\\mathrm{i}) = \\theta$, where $\\theta$ is a fixed angle in the interval $-\\pi < \\theta \\le \\pi$.\n\n(i) Give a geometrical description of the locus of the point $P$ representing $z$. [1]\n\n(ii) Given that $\\theta = \\frac{\\pi}{3}$, find the exact minimum value of $|z - 3 - 5\\mathrm{i}|$. [3]`,
   'jpjc-2022-p1-q08': `(a) By expressing the equation of the curve $y = \\frac{12x+11}{2x+1}$ in the form $y = A + \\frac{B}{2x+1}$, where $A$ and $B$ are constants, describe a sequence of three transformations which maps the graph of $y = \\frac{1}{2x-3}$ onto the graph of $y = \\frac{12x+11}{2x+1}$. [4]\n\n(b) The diagram shows the graph of $y = \\mathrm{f}(x)$. The curve has a maximum point at $(0,-5)$ and a minimum point at $(6,-4)$. The equations of the asymptotes of the curve are $x = -2$, $x = 2$ and $y = -2$.\n\nSketch the graph of $y = \\mathrm{f}(-x+2)+4$, indicating clearly the equations of the asymptotes and the coordinates of the axial intercepts and turning points. [3]`,
+  'rvhs-2021-p1-q05': `The functions $\\mathrm{f}$ and $\\mathrm{g}$ are defined by\n$\\mathrm{f} : x \\mapsto \\frac{x}{x-1}, \\quad x \\in \\mathbb{R}, x \\ne 1$,\n$\\mathrm{g} : x \\mapsto \\frac{5}{x+1}, \\quad x \\in \\mathbb{R}, x \\le 4$.\n\n(i) Find $\\mathrm{f}^{-1}(x)$ and state the domain of $\\mathrm{f}^{-1}$. [3]\n\n(ii) State whether the composite functions $\\mathrm{fg}$ and $\\mathrm{gf}$ exist, justifying your answer.\nHence find the range of the composite function(s) that exist(s). [4]`,
 };
 
 function isIsolatedCrop(qid: string): boolean {
@@ -87,6 +88,8 @@ export function cleanTextContent(raw: string, qid?: string): string {
   text = text.replace(/\0/g, '').replace(/\\u0000/g, '').replace(/[\uD800-\uDFFF]/g, '');
   text = text.replace(/©\s*[A-Z0-9\s\-_.,/]+/gi, '');
   text = text.replace(/\[\s*Turn\s+over\s*\]?/gi, '');
+  text = text.replace(/\[?\s*Integration not tested[^\n\]]*\]?/gi, '');
+  text = text.replace(/\[?\s*[^\]\n]*not tested in \d{4}[^\n\]]*\]?/gi, '');
   text = text.replace(/\b(?:H2|9758|9740)\b[^\n]*/gi, '');
 
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);

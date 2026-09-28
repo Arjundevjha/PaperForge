@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getGlobalStore } from '@paperforge/db';
-import { SubjectIdSchema, SingaporeSchoolCodeSchema } from '@paperforge/shared';
-import { syncAllQuestionsFromDb } from '../../../lib/supabase/db-sync';
+import { SubjectIdSchema, SingaporeSchoolCodeSchema, QuestionReclassifyPayloadSchema } from '@paperforge/shared';
+import { syncAllQuestionsFromDb, reclassifyQuestionInDb } from '../../../lib/supabase/db-sync';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -44,3 +44,40 @@ export async function GET(request: Request) {
     answers,
   });
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const rawBody = await request.json();
+    const parsed = QuestionReclassifyPayloadSchema.safeParse(rawBody);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid reclassification payload', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { questionId, chapter, subtopic, status } = parsed.data;
+    const store = getGlobalStore();
+
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      await syncAllQuestionsFromDb(store);
+    }
+
+    const result = await reclassifyQuestionInDb(store, questionId, chapter, subtopic, status);
+
+    if (!result.question) {
+      return NextResponse.json({ error: `Question ${questionId} not found` }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: result.question,
+      movedFromWorksheet: result.movedFromWorksheet,
+      movedToWorksheet: result.movedToWorksheet,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
+

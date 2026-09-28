@@ -84,3 +84,40 @@ test('PaperForgeDataStore manages user profiles and RBAC personas', () => {
   assert.strictEqual(store.getUserById('usr_new_01')?.name, 'Mr. David Tan');
   assert.strictEqual(store.listUsers().length, 3);
 });
+
+test('PaperForgeDataStore updates question and moves between worksheets', () => {
+  const store = new PaperForgeDataStore();
+  const questions = store.listQuestions();
+  assert.ok(questions.length > 0);
+  const q = questions[0];
+
+  const updated = store.updateQuestion(q.id, {
+    chapter: 'Functions and Graphs',
+    subtopic: 'Functions',
+  });
+
+  assert.ok(updated);
+  assert.strictEqual(updated.chapter, 'Functions and Graphs');
+  assert.strictEqual(updated.subtopic, 'Functions');
+  assert.strictEqual(store.getQuestionById(q.id)?.chapter, 'Functions and Graphs');
+
+  const worksheets = store.listWorksheets();
+  if (worksheets.length >= 2) {
+    const ws1 = worksheets[0];
+    const ws2 = worksheets[1];
+    const initialWs1Count = ws1.manifest.questions.length;
+    const initialWs2Count = ws2.manifest.questions.length;
+
+    // Put question in ws1
+    if (!ws1.manifest.questions.includes(q.id)) {
+      ws1.manifest.questions.push(q.id);
+      ws1.questionCount = ws1.manifest.questions.length;
+    }
+
+    const moved = store.moveQuestionBetweenWorksheets(q.id, ws1.id, ws2.id);
+    assert.strictEqual(moved, true);
+    assert.ok(!ws1.manifest.questions.includes(q.id));
+    assert.ok(ws2.manifest.questions.includes(q.id));
+  }
+});
+
