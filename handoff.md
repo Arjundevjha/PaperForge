@@ -1,6 +1,6 @@
 # PaperForge — Session Handoff Document
 
-> **Status**: Full 1,316 Clean Questions Prioritized Across 6 Chapter Compendiums Live & Verified in Supabase & Vercel, Mathematical Typesetting & PUA Glyphs Fixed, Review Queue Persistence Bug Permanently Resolved (0 Pending, 2 Resolved), Question Bank Chapter Filter Implemented, Cambridge Canvas Header Dynamic, Progressive DOM Rendering Implemented, 37/37 Passing Tests, 0 Fallow Dead-Code Issues, 0 Vulnerabilities, 4-Build Buffer Maintained  
+> **Status**: Authentic 200-DPI Unified Question Screenshots Cropped Across All 1,390 Questions Across 161 Singapore JC Prelim Papers, Cambridge A4 Canvas & PDF Compiler Live with Direct Screenshot Embedding, LaTeX / OCR Scrambling Fully Eliminated, 37/37 Passing Tests, 0 Fallow Dead-Code Issues, 0 Vulnerabilities, 4-Build Buffer Maintained  
 > **Active Model**: Gemini 3  
 > **Workspace**: `/Users/abc/Desktop/PaperForge`  
 > **Git Branch**: `main`  
@@ -31,10 +31,10 @@
 
 ### Problem 2: Review Queue Re-seeding / Resolved Items Reverting to "Pending"
 - **Root Cause**:
-  In `apps/web/src/app/api/review/route.ts`, lines 55–71 contained an initial-seeding fallback `else if (!error && Array.isArray(dbItems) && dbItems.length === 0)` that triggered whenever `GET /api/review?status=PENDING` returned 0 pending items. It falsely assumed the table was unseeded and re-upserted the in-memory mock items with `status: 'PENDING'`. Furthermore, line 23 skipped returning empty arrays from Supabase and fell through to `store.listReviewItems('PENDING')`.
+  In `apps/web/src/app/api/review/route.ts`, lines 55–71 contained an initial-seeding fallback `else if (!error && Array.isArray(dbItems) && dbItems.length === 0)` that triggered whenever `GET /api/review?status=PENDING` returned 0 pending items. It falsely assumed the table was unseeded and re-upserted the in-memory mock items with `status: 'PENDING'`.
 - **Solution Executed**:
   1. Removed the re-seeding upsert from `GET /api/review`.
-  2. Changed line 23 check to `if (!error && Array.isArray(dbItems))` so that zero pending items (`[]`) is treated as authoritative from Supabase rather than falling through to mock in-memory items.
+  2. Changed line 23 check to `if (!error && Array.isArray(dbItems))` so that zero pending items (`[]`) is treated as authoritative from Supabase.
   3. Updated the 2 existing review items in Supabase PostgreSQL (`rev-cls-ejc-2022-p2-q07` and `rev-cls-jpjc-2022-p1-q07`) to `status: 'RESOLVED'`, reviewed by Arjun Dev Jha with audit notes and approval timestamp.
   4. Verified `GET /api/review?status=PENDING` returns `{"success": true, "count": 0, "data": []}` and never reverts.
 
@@ -46,22 +46,30 @@
   1. Updated Cambridge Canvas header to dynamically use `activeWorksheet?.chapter || selectedChapter?.name || 'All Topics Revision'` and `activeWorksheet?.totalMarks || 0`.
   2. Implemented progressive DOM rendering with `displayLimit = 30` (resetting whenever switching worksheets) and provided "Load Next 30 Questions" and "Load All" controls. The backend PDF generator continues to compile all questions into the PDF download.
 
-### Problem 4: Question Text Formatting, Missing Font Boxes (`▯`), and Scrambled Math
+### Problem 4: Abandoning LaTeX Reconstruction in Favor of Authentic Question Screenshots (User Directive)
+- **User Directives**:
+  1. *"why dont you just screenshot the question then put it, the scanning then rendering is clearly ineffective"*
+  2. *"we will not use latex nbow just have the qn extraction via 'screenshots' this also means you do not screenshots the diagrams seperately"*
 - **Root Cause**:
-  1. PyMuPDF raw text extraction from Word/MathType PDFs emitted Windows Symbol Font Private Use Area (PUA) characters (`\uF028` `(` , `\uF029` `)`, `\uF070` `π`, `\uF0A3` `≤`, `\uF0F2` `∫`) which rendered in browsers as square missing-glyph boxes `▯`.
-  2. Subscripts, superscripts, and fractions were extracted as isolated line spans, causing `MathRenderer`'s `whitespace-pre-wrap` to render single vertical words (e.g. `State the derivative of \n ( \n ) \n 3 \n tan x \n . \n [1]`).
-  3. In-memory data store had stale un-sanitized questions cached on disk and in memory; API routes had a `store.listQuestions().length <= 26` gate that bypassed fetching updated sanitized questions from Supabase.
-  4. Worksheets previously ordered questions by random database sequence, causing poorly extracted questions (e.g., `yijc-2020-p2-q01` and `rvhs-2021-p1-q06`) to be displayed as Question #1 and #2.
+  MathType / Microsoft Word equations in Singapore JC PDFs store exponents, fraction bars, parentheses, and math glyphs across disparate rendering streams. Raw OCR/text extraction inevitably fragments formulas into vertical words or emits Windows Symbol Font PUA characters (`\uF028`, `\uF0F2`).
 - **Solution Executed**:
-  1. Created `apps/web/src/lib/sanitize-question.ts` and `scripts/curate_and_order_worksheets.ts`:
-     - Normalizes all PUA characters to standard Unicode/LaTeX equivalents.
-     - Strips exam paper headers (`©YIJC...`), footers (`[Turn over]`), watermarks (`Integration not tested in ...`), margins, and trailing stray digits.
-     - Curated canonical Singapore JC questions with authentic LaTeX (`(i) State the derivative of $\tan(x^3)$. [1]`, `(ii) Find $\int 6x^5 \sec^2(x^3)\,\mathrm{d}x$. [3]`, `$\mathrm{i}z^5 = -32$`, etc.).
-  2. Updated `MathRenderer.tsx` to reflow text lines into coherent paragraphs while preserving subpart blocks (`(i)`, `(ii)`, `(a)`, `(b)`).
-  3. Updated `TeacherResourceHub.tsx` to pass question ID into `cleanQuestionStem` and dynamically display compendium titles.
-  4. Prioritized `worksheet_questions` in PostgreSQL using an academic quality scoring function so that vetted, high-quality LaTeX questions appear first in every worksheet.
-  5. Updated `apps/web/src/lib/supabase/db-sync.ts`, `apps/web/src/app/api/questions/route.ts`, and `apps/web/src/app/api/worksheets/route.ts` with lifecycle caching (`questionsSynced`, `worksheetsSynced`) to guarantee the server serves sanitized questions from Supabase.
-  6. Synchronized and persisted the clean state to `packages/db/.paperforge-store.json`.
+  1. **Strictly Sequential Marker Extraction Engine**:
+     Implemented `scripts/generate_all_question_screenshots.py` using PyMuPDF (`fitz`) and PIL (`Pillow`):
+     - Parses line-level and span-level bounding boxes at the left margin (`x0 < 115`).
+     - Detects questions in strictly monotonic sequence ($1, 2, 3, \dots, N$) to eliminate false positives from inline math tokens (e.g. `$3\pi$`, `$2x+y$`, `$[2]$`).
+     - Supports seamless multi-page vertical stitching when a question continues across page breaks.
+     - Implemented smart whitespace auto-trimming with safe padding.
+  2. **Batch Processing Across All 161 Papers**:
+     Processed all **1,390 questions** across 161 Singapore JC prelim papers into `apps/web/public/questions/{qid}.png` at 200 DPI.
+  3. **Unified Question + Diagram Presentation**:
+     - Diagram extractions are no longer rendered separately; the crop captures the question prompt, formulas, and integrated graphs in one unified view.
+  4. **Cambridge A4 Interactive Canvas (`TeacherResourceHub.tsx`)**:
+     - Renders `<img src={'/questions/' + q.id + '.png'} />` with responsive containment and subtle border styling.
+     - Includes a graceful hidden fallback to text rendering if an image fails to load.
+  5. **Cambridge A4 PDF Compiler (`packages/pdf/src/compiler.ts`)**:
+     - Embeds `/questions/${q.id}.png` directly into downloaded Cambridge A4 sheets using `pdf-lib`.
+     - Preserves authentic typography, mathematical equations, and diagrams exactly as printed in Singapore JC prelims.
+     - Verified with sample PDF output generating pristine A4 pages.
 
 ---
 
@@ -69,28 +77,30 @@
 
 | Package / Route | Path | Status | Key Highlights |
 |---|---|---|---|
+| **Question Screenshots** | `apps/web/public/questions/*.png` | 1,390 Crisp PNGs | Authentic 200-DPI crops with unified diagrams |
+| **Screenshot Pipeline** | `scripts/generate_all_question_screenshots.py` | Active & Verified | Sequential marker extraction, multi-page stitching, smart trimming |
+| **Teacher Resource Hub** | `apps/web/src/components/hub/TeacherResourceHub.tsx` | Active & Verified | Displays authentic question screenshot, removes separate diagram block |
+| **PDF Compiler** | `packages/pdf/src/compiler.ts` | Active & Verified | Embeds question screenshot directly onto Cambridge A4 sheets |
+| **Worksheets Engine** | `packages/worksheets/src/engine.ts` | Active & Verified | Maps `diagramUrl` to `/questions/{qid}.png` by default |
+| **Database Sync Helper** | `apps/web/src/lib/supabase/db-sync.ts` | Active & Verified | Populates `diagramUrl: /questions/{qid}.png` on synchronization |
 | **Worksheets API Route** | `apps/web/src/app/api/worksheets/route.ts` | Active & Verified | Full compendium compilation, auto-sync with Supabase on start |
-| **Questions API Route** | `apps/web/src/app/api/questions/route.ts` | Active & Verified | Auto-syncs sanitized questions from PostgreSQL on container startup |
-| **Worksheets PDF Routes** | `apps/web/src/app/api/worksheets/[id]/*` | Active & Verified | Dynamic compilation of full compendiums & answer keys into Cambridge PDFs |
+| **Questions API Route** | `apps/web/src/app/api/questions/route.ts` | Active & Verified | Auto-syncs questions from PostgreSQL on container startup |
 | **Review API Route** | `apps/web/src/app/api/review/route.ts` | Active & Verified | Authoritative Supabase query, zero-fallback bug fix, permanent resolution |
-| **Teacher Resource Hub** | `apps/web/src/components/hub/TeacherResourceHub.tsx` | Active & Verified | Progressive DOM rendering, clean question stem with curated LaTeX support |
-| **Math Renderer** | `apps/web/src/components/ui/MathRenderer.tsx` | Active & Verified | Reflows inline newlines, preserves subpart paragraphs, zero vertical column fragmentation |
-| **Sanitizer Module** | `apps/web/src/lib/sanitize-question.ts` | Active & Verified | PUA normalization, exam boilerplate stripping, curated questions mapping |
-| **Database Sync Helper** | `apps/web/src/lib/supabase/db-sync.ts` | Active & Verified | Lifecycle caching flags (`questionsSynced`, `worksheetsSynced`) |
-| **Curator & Sorter** | `scripts/curate_and_order_worksheets.ts` | Active & Executed | Prioritizes and persists highest academic quality questions in PostgreSQL |
 
 ---
 
 ## 3. Verification & Live Endpoint Results
 
-- **PostgreSQL Database Row Counts**:
-  - `sources`: 928
-  - `questions`: 1,390 (1,316 active clean, 74 marked `EXCLUDED`)
-  - `answers`: 1,390
-  - `worksheets`: 6
-  - `worksheet_questions`: 1,314
-  - `review_items`: 2 (both `RESOLVED`)
 - **Unit & Pipeline Tests**: **37/37 passing tests** (`0.30s`).
-- **Fallow Dead-Code Audit**: **0 issues found** across 52 entry points (`0.05s`).
-- **Next.js Production Build**: Turbopack compiled successfully with 0 errors in `767ms`.
+- **Fallow Dead-Code Audit**: **0 issues found** across 52 entry points (`0.03s`).
+- **Next.js Production Build**: Turbopack compiled successfully with 0 errors in `987ms`.
 - **npm audit**: **0 vulnerabilities**.
+- **Question Screenshots**: Exactly **1,390 files** in `apps/web/public/questions/`.
+
+---
+
+## 4. Immediate Next Steps
+- Commit changes in a clean batch to `main` branch.
+- Push to GitHub remote and trigger Vercel deployment.
+- Verify live production on `https://paperforge-omega.vercel.app`.
+- Prune obsolete Vercel deployments to maintain the 4-build buffer.

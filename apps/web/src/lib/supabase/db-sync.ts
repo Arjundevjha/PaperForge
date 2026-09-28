@@ -69,6 +69,7 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore, force =
           status: q.status,
           createdAt: q.created_at,
           updatedAt: q.updated_at,
+          diagramUrl: q.diagram_url || `/questions/${q.id}.png`,
         });
       }
       if (newQuestions.length > 0) {

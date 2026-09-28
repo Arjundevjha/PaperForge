@@ -448,19 +448,25 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                           {q.marks && <span className="font-mono text-slate-800">[{q.marks} marks]</span>}
                         </div>
 
-                        <div className="font-serif text-[12px] text-justify text-[#111827] pl-1 leading-relaxed">
-                          <MathRenderer content={cleanQuestionStem(q.textContent, q.questionNumber, q.id)} />
+                        {/* Authentic High-Resolution Question Screenshot */}
+                        <div className="my-2.5 flex justify-center bg-white rounded">
+                          <img
+                            src={`/questions/${q.id}.png`}
+                            alt={`Question ${idx + 1}`}
+                            className="max-w-full h-auto object-contain rounded border border-slate-200/80 shadow-xs"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLElement).style.display = 'none';
+                              const fallbackEl = document.getElementById(`fallback-text-${q.id}`);
+                              if (fallbackEl) fallbackEl.style.display = 'block';
+                            }}
+                          />
                         </div>
 
-                        {q.diagramUrl && (
-                          <div className="my-3 flex justify-center">
-                            <img
-                              src={q.diagramUrl}
-                              alt={`Diagram for Question ${idx + 1}`}
-                              className="max-h-64 max-w-full object-contain border border-slate-200 rounded p-1 bg-white shadow-sm"
-                            />
-                          </div>
-                        )}
+                        {/* Graceful Fallback if screenshot cannot load */}
+                        <div id={`fallback-text-${q.id}`} style={{ display: 'none' }} className="font-serif text-[12px] text-justify text-[#111827] pl-1 leading-relaxed">
+                          <MathRenderer content={cleanQuestionStem(q.textContent, q.questionNumber, q.id)} />
+                        </div>
 
                         {/* Marking Scheme Overlay if enabled */}
                         {showMarkingScheme && ans && (

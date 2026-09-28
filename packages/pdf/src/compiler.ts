@@ -266,40 +266,97 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
       y = A4_HEIGHT - 60;
     }
 
-    // Question Header & Number
-    const qTitle = `${q.questionNumber}.`;
-    page.drawText(qTitle, {
-      x: MARGIN_LEFT,
-      y,
-      size: 11,
-      font: fontBold,
-      color: rgb(0.05, 0.05, 0.05),
-    });
+    const diagramFilePath = resolveDiagramPath(q.diagramUrl);
+    let embeddedScreenshot = false;
 
-    if (q.marks) {
-      const marksText = `[${q.marks}]`;
-      page.drawText(marksText, {
-        x: A4_WIDTH - MARGIN_RIGHT - 25,
-        y,
-        size: 10,
-        font: fontBold,
-        color: rgb(0.1, 0.1, 0.1),
-      });
+    if (diagramFilePath) {
+      try {
+        const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ diagramFilePath);
+        const img = await doc.embedPng(imageBytes);
+        const maxImgWidth = CONTENT_WIDTH - 20;
+        const maxImgHeight = 520;
+        const dims = img.scaleToFit(maxImgWidth, maxImgHeight);
+
+        if (y - dims.height < 90) {
+          page.drawText('[Turn Over', {
+            x: A4_WIDTH - MARGIN_RIGHT - 60,
+            y: 35,
+            size: 9,
+            font: fontSans,
+            color: rgb(0.3, 0.3, 0.3),
+          });
+          page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
+          y = A4_HEIGHT - 60;
+        }
+
+        page.drawImage(img, {
+          x: MARGIN_LEFT + (CONTENT_WIDTH - dims.width) / 2,
+          y: y - dims.height,
+          width: dims.width,
+          height: dims.height,
+        });
+        y -= dims.height + 10;
+        embeddedScreenshot = true;
+      } catch {
+        embeddedScreenshot = false;
+      }
     }
 
-    y -= 14;
+    if (!embeddedScreenshot) {
+      // Question Header & Number
+      const qTitle = `${q.questionNumber}.`;
+      page.drawText(qTitle, {
+        x: MARGIN_LEFT,
+        y,
+        size: 11,
+        font: fontBold,
+        color: rgb(0.05, 0.05, 0.05),
+      });
 
-    // Text content lines (wrap lines)
-    const sanitizedText = sanitizeForPdf(q.textContent);
-    const words = sanitizedText.split(/\s+/).filter(Boolean);
-    let line = '';
-    const lineHeight = 14;
+      if (q.marks) {
+        const marksText = `[${q.marks}]`;
+        page.drawText(marksText, {
+          x: A4_WIDTH - MARGIN_RIGHT - 25,
+          y,
+          size: 10,
+          font: fontBold,
+          color: rgb(0.1, 0.1, 0.1),
+        });
+      }
 
-    for (const word of words) {
-      const testLine = line ? `${line} ${word}` : word;
-      const width = fontRegular.widthOfTextAtSize(testLine, 10);
+      y -= 14;
 
-      if (width > CONTENT_WIDTH - 30) {
+      // Text content lines (wrap lines)
+      const sanitizedText = sanitizeForPdf(q.textContent);
+      const words = sanitizedText.split(/\s+/).filter(Boolean);
+      let line = '';
+      const lineHeight = 14;
+
+      for (const word of words) {
+        const testLine = line ? `${line} ${word}` : word;
+        const width = fontRegular.widthOfTextAtSize(testLine, 10);
+
+        if (width > CONTENT_WIDTH - 30) {
+          page.drawText(line, {
+            x: MARGIN_LEFT + 15,
+            y,
+            size: 10,
+            font: fontRegular,
+            color: rgb(0.1, 0.1, 0.1),
+          });
+          line = word;
+          y -= lineHeight;
+
+          if (y < 90) {
+            page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
+            y = A4_HEIGHT - 60;
+          }
+        } else {
+          line = testLine;
+        }
+      }
+
+      if (line) {
         page.drawText(line, {
           x: MARGIN_LEFT + 15,
           y,
@@ -307,62 +364,7 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
           font: fontRegular,
           color: rgb(0.1, 0.1, 0.1),
         });
-        line = word;
         y -= lineHeight;
-
-        if (y < 90) {
-          page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
-          y = A4_HEIGHT - 60;
-        }
-      } else {
-        line = testLine;
-      }
-    }
-
-    if (line) {
-      page.drawText(line, {
-        x: MARGIN_LEFT + 15,
-        y,
-        size: 10,
-        font: fontRegular,
-        color: rgb(0.1, 0.1, 0.1),
-      });
-      y -= lineHeight;
-    }
-
-    if (q.diagramUrl) {
-      const diagramFilePath = resolveDiagramPath(q.diagramUrl);
-      if (diagramFilePath) {
-        try {
-          const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ diagramFilePath);
-          const img = await doc.embedPng(imageBytes);
-          const maxImgWidth = CONTENT_WIDTH - 60;
-          const maxImgHeight = 150;
-          const dims = img.scaleToFit(maxImgWidth, maxImgHeight);
-
-          if (y - dims.height < 90) {
-            page.drawText('[Turn Over', {
-              x: A4_WIDTH - MARGIN_RIGHT - 60,
-              y: 35,
-              size: 9,
-              font: fontSans,
-              color: rgb(0.3, 0.3, 0.3),
-            });
-            page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
-            y = A4_HEIGHT - 60;
-          }
-
-          y -= 4;
-          page.drawImage(img, {
-            x: MARGIN_LEFT + (CONTENT_WIDTH - dims.width) / 2,
-            y: y - dims.height,
-            width: dims.width,
-            height: dims.height,
-          });
-          y -= dims.height + 10;
-        } catch {
-          // Graceful fallback if image cannot be embedded
-        }
       }
     }
 

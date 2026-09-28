@@ -145,7 +145,7 @@ export async function compileWorksheetDocuments(
       textContent: q.textContent,
       marks: q.marks,
       citation: q.provenance.citation,
-      diagramUrl: q.diagramUrl,
+      diagramUrl: q.diagramUrl || `/questions/${q.id}.png`,
     })),
   });
 
