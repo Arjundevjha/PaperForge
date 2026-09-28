@@ -1,10 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
+import * as path from 'path';
+import * as fs from 'fs';
+
+// Load .env.local
+const envPath = path.resolve(process.cwd(), '.env.local');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf-8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq > 0) {
+      const key = trimmed.substring(0, eq).trim();
+      let val = trimmed.substring(eq + 1).trim();
+      if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase credentials in apps/web/.env.local');
+  console.error('Missing Supabase credentials in .env.local');
   process.exit(1);
 }
 
@@ -22,7 +41,26 @@ const CURATED_QUESTIONS: Record<string, string> = {
   'yijc-2020-p2-q02': `(a) Given that $z = \\frac{\\lambda - 4\\mathrm{i}}{1 - \\lambda\\mathrm{i}}$ where $\\lambda \\in \\mathbb{R}$ and $\\arg(z) = \\pi$, find the value of $z$. [3]\n\n(b) Do not use a calculator in answering this question.\nThe complex numbers $z$ and $w$ are given by $z = \\frac{1+\\mathrm{i}}{1-\\mathrm{i}}$ and $w = 1 + \\mathrm{i}\\sqrt{2}$.\n\n(i) Express $z$ and $w$ in exact polar form $r\\mathrm{e}^{\\mathrm{i}\\theta}$ where $r > 0$ and $-\\pi < \\theta \\le \\pi$. [2]\n\n(ii) On a single Argand diagram, sketch the points $A, B$ and $C$ representing the complex numbers $z, w$ and $z+w$ respectively. State the geometric shape of $OACB$. [2]`,
   'nyjc-2012-p1-q02': `The vectors $\\mathbf{a}$ and $\\mathbf{b}$ are given by $\\mathbf{a} = (\\sin \\theta)\\mathbf{i} + (\\cos \\theta)\\mathbf{j} + \\mathbf{k}$ and $\\mathbf{b} = (\\sin \\phi)\\mathbf{i} + (\\cos \\phi)\\mathbf{j} + \\mathbf{k}$, where $0 \\le \\theta \\le \\phi \\le \\pi$.\n\nFind an expression for $\\mathbf{a} \\times \\mathbf{b}$ in terms of $\\delta$, where $\\delta = \\frac{1}{2}(\\phi - \\theta)$. [5]\n\nDeduce that the angle $\\alpha$ between $\\mathbf{a}$ and $\\mathbf{b}$ is given by $\\sin \\frac{\\alpha}{2} = \\sin \\delta \\sqrt{1 + \\cos^2 \\delta}$. [2]`,
   'vjc-2012-p2-q01': `The complex number $z$ satisfies $\\arg(z - 1 - 2\\mathrm{i}) = \\theta$, where $\\theta$ is a fixed angle in the interval $-\\pi < \\theta \\le \\pi$.\n\n(i) Give a geometrical description of the locus of the point $P$ representing $z$. [1]\n\n(ii) Given that $\\theta = \\frac{\\pi}{3}$, find the exact minimum value of $|z - 3 - 5\\mathrm{i}|$. [3]`,
+  'jpjc-2022-p1-q08': `(a) By expressing the equation of the curve $y = \\frac{12x+11}{2x+1}$ in the form $y = A + \\frac{B}{2x+1}$, where $A$ and $B$ are constants, describe a sequence of three transformations which maps the graph of $y = \\frac{1}{2x-3}$ onto the graph of $y = \\frac{12x+11}{2x+1}$. [4]\n\n(b) The diagram shows the graph of $y = \\mathrm{f}(x)$. The curve has a maximum point at $(0,-5)$ and a minimum point at $(6,-4)$. The equations of the asymptotes of the curve are $x = -2$, $x = 2$ and $y = -2$.\n\nSketch the graph of $y = \\mathrm{f}(-x+2)+4$, indicating clearly the equations of the asymptotes and the coordinates of the axial intercepts and turning points. [3]`,
 };
+
+function isIsolatedCrop(qid: string): boolean {
+  const imgPath = path.resolve(process.cwd(), 'apps/web/public/questions', `${qid}.png`);
+  if (!fs.existsSync(imgPath)) return false;
+  try {
+    const fd = fs.openSync(imgPath, 'r');
+    const buf = Buffer.alloc(24);
+    fs.readSync(fd, buf, 0, 24, 0);
+    fs.closeSync(fd);
+    const width = buf.readUInt32BE(16);
+    const height = buf.readUInt32BE(20);
+    // Strict isolated crop: single question between 80px and 1350px tall, and > 200px wide
+    // Excludes any full-page clumped captures (height > 1350)
+    return width > 200 && height >= 80 && height <= 1350;
+  } catch {
+    return false;
+  }
+}
 
 export function cleanTextContent(raw: string, qid?: string): string {
   if (qid && CURATED_QUESTIONS[qid]) {
@@ -31,172 +69,136 @@ export function cleanTextContent(raw: string, qid?: string): string {
   if (!raw) return '';
 
   let text = raw;
-
-  // 1. MathType PUA Characters
   const puaMap: Record<string, string> = {
-    '\uf020': ' ',
-    '\uf021': '!',
-    '\uf028': '(',
-    '\uf029': ')',
-    '\uf02a': '*',
-    '\uf02b': '+',
-    '\uf02c': ',',
-    '\uf02d': '-',
-    '\uf02e': '.',
-    '\uf02f': '/',
-    '\uf03a': ':',
-    '\uf03b': ';',
-    '\uf03c': '<',
-    '\uf03d': '=',
-    '\uf03e': '>',
-    '\uf03f': '?',
-    '\uf05b': '[',
-    '\uf05d': ']',
-    '\uf070': 'π',
-    '\uf071': 'θ',
-    '\uf072': 'ρ',
-    '\uf073': 'σ',
-    '\uf074': 'τ',
-    '\uf075': 'υ',
-    '\uf076': 'φ',
-    '\uf077': 'ω',
-    '\uf061': 'α',
-    '\uf062': 'β',
-    '\uf063': 'χ',
-    '\uf064': 'δ',
-    '\uf065': 'ε',
-    '\uf066': 'φ',
-    '\uf067': 'γ',
-    '\uf068': 'η',
-    '\uf069': 'ι',
-    '\uf06a': 'φ',
-    '\uf06b': 'κ',
-    '\uf06c': 'λ',
-    '\uf06d': 'μ',
-    '\uf06e': 'ν',
-    '\uf07a': 'ζ',
-    '\uf0a3': '≤',
-    '\uf0b3': '≥',
-    '\uf0b4': '×',
-    '\uf0b1': '±',
-    '\uf0a5': '∞',
-    '\uf0ce': '∈',
-    '\uf0c8': '∪',
-    '\uf0c7': '∩',
-    '\uf0cc': '⊂',
-    '\uf0cd': '⊆',
-    '\uf0d6': '√',
-    '\uf0e0': '→',
-    '\uf0de': '⇒',
-    '\uf0db': '⇔',
-    '\uf0f2': '∫',
-    '\uf0f3': '∫',
-    '\uf0f4': '∫',
-    '\uf0f5': '∫',
-    '': '∫',
-    '': '',
-    '': '',
-    '': '≤',
-    '': '≥',
-    '': '×',
-    '−': '-',
-    '–': '-',
-    '—': '-',
-    '“': '"',
-    '”': '"',
-    '’': "'",
-    '‘': "'",
-    '': '(',
-    '': ')',
-    '': 'π',
-    '': 'θ',
-    '': 'α',
-    '': 'β',
-    '': 'λ',
-    '': 'μ',
-    '': 'σ',
-    '': 'ω',
-    '': '∈',
-    '': '∉',
-    '': '<',
-    '': '>',
-    '': '+',
-    '': '-',
-    '': '=',
-    '': '±',
-    '': '∞',
-    '': '√',
-    '': '→',
-    '': '⇒',
-    '': '⇔',
-    '': '∴',
-    '': '∪',
-    '': '∩',
+    '\uf028': '(', '\uf029': ')', '\uf02b': '+', '\uf02d': '-', '\uf03d': '=',
+    '\uf03c': '<', '\uf03e': '>', '\uf05b': '[', '\uf05d': ']', '\uf070': 'π',
+    '\uf071': 'θ', '\uf061': 'α', '\uf062': 'β', '\uf06c': 'λ', '\uf06d': 'μ',
+    '\uf0a3': '≤', '\uf0b3': '≥', '\uf0b4': '×', '\uf0b1': '±', '\uf0a5': '∞',
+    '\uf0ce': '∈', '\uf0d6': '√', '\uf0e0': '→', '\uf0de': '⇒', '\uf0db': '⇔',
+    '\uf0f2': '∫', '\uf0f3': '∫', '\uf0f4': '∫', '\uf0f5': '∫', '': '∫',
+    '': '≤', '': '≥',
   };
 
-  for (const [k, v] of Object.entries(puaMap)) {
-    text = text.replaceAll(k, v);
+  for (const [pua, repl] of Object.entries(puaMap)) {
+    text = text.split(pua).join(repl);
   }
-  text = text.replace(/[\uE000-\uF8FF]/g, '');
 
-  // 2. Exam Headers, Footers, Watermarks & Margins
-  text = text.replace(/©\s*[A-Z0-9/.\s_\-]+(?:\n|$)/gi, '\n');
-  text = text.replace(/\b(?:9758|9740)\/\d{2}\/(?:[A-Za-z0-9]+\/)?\d{2}\b/gi, '');
-  text = text.replace(/\[\s*Turn\s*[oO]ver\s*\]?/gi, '');
-  text = text.replace(/\b(?:End\s+of\s+Paper|BLANK\s+PAGE)\b/gi, '');
-  text = text.replace(/\bIntegration\s+not\s+tested\s+in\s+[^\n]*/gi, '');
-  text = text.replace(/\b\d{4}\s+[A-Z]{2,6}\s+(?:9758|9740)\/\d{2}\b/gi, '');
-  text = text.replace(/\b\d+\s*\|\s*P\s*a\s*g\s*e\b/gi, '');
-  text = text.replace(/\bPage\s+\d+\s+of\s+\d+\b/gi, '');
-  text = text.replace(/DO\s+NOT\s+WRITE\s+IN\s+THIS\s+MARGIN/gi, '');
-  text = text.replace(/\bSection\s+[A-Z]:\s*[^\n\[]+(?:\[\d+\s*marks?\])?/gi, '');
+  text = text.replace(/[\ue000-\uf8ff]/g, '');
+  text = text.replace(/\0/g, '').replace(/\\u0000/g, '').replace(/[\uD800-\uDFFF]/g, '');
+  text = text.replace(/©\s*[A-Z0-9\s\-_.,/]+/gi, '');
+  text = text.replace(/\[\s*Turn\s+over\s*\]?/gi, '');
+  text = text.replace(/\b(?:H2|9758|9740)\b[^\n]*/gi, '');
 
-  // 3. Question numbering prefixes and trailing stray numbers
-  text = text.replace(/^\s*(?:Question\s*)?\d{1,2}\s*[\.:\)]?\s*\n/m, '');
-  text = text.replace(/\n\s*\d{1,2}\s*$/m, '');
-
-  // 4. Reflow lines into paragraphs
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-  const paragraphs: string[] = [];
-  let currentGroup: string[] = [];
-  const partMarker = /^(\([a-z0-9ivx]+\)|\b(?:Question\s*)?\d+[\.\)]|\bpart\s+[a-z0-9ivx]+)/i;
+  const filteredLines = lines.filter((l) => {
+    if (/^(?:page\s+\d+|\d+\s+of\s+\d+|\[\d+\]\s*page)/i.test(l)) return false;
+    if (/^\d{1,2}\s*$/.test(l)) return false;
+    return true;
+  });
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (partMarker.test(line)) {
-      if (currentGroup.length > 0) {
-        paragraphs.push(currentGroup.join(' '));
-        currentGroup = [];
-      }
-      currentGroup.push(line);
-    } else {
-      const prev = currentGroup[currentGroup.length - 1];
-      if (prev && /\[\s*\d+\s*(?:marks?|m)?\s*\]$/i.test(prev)) {
-        paragraphs.push(currentGroup.join(' '));
-        currentGroup = [line];
-      } else {
-        currentGroup.push(line);
-      }
+  return filteredLines.join('\n\n');
+}
+
+export function classifyQuestionText(text: string): { chapter: string; subtopic: string } {
+  const t = text.toLowerCase();
+  const scores: Record<string, number> = {
+    'Complex Numbers': 0,
+    'Vectors': 0,
+    'Sequences and Series': 0,
+    'Probability and Statistics': 0,
+    'Calculus': 0,
+    'Functions and Graphs': 0,
+  };
+
+  // Complex Numbers
+  if (/\bcomplex number\b|\bargand\b|\barg\s*\(|\b\|z\||\bmodulus and argument\b|\bpolar form\b|\bcartesian form a\s*\+\s*ib\b|\bpurely imaginary\b|\bpurely real\b/i.test(t)) {
+    scores['Complex Numbers'] += 40;
+  }
+  if (/\b[z|w]\b\s*=\s*.*i\b/i.test(t) || /e\^\{?i/i.test(t) || /\biz\^/i.test(t) || /\be\^i\b/i.test(t) || /\bconjugate\b/i.test(t) || /\bpolynomial.*root\b|\broot.*polynomial\b|\bz\^3\b|\bz\^4\b|a\s*\+\s*ib/i.test(t)) {
+    scores['Complex Numbers'] += 25;
+  }
+
+  // Vectors
+  if (/\bposition vector\b|\bperpendicular from\b|\bfoot of perpendicular\b|\blines and planes\b|\bacute angle between the planes\b|\bpoint of intersection of the planes\b|\bline of intersection\b|\bnon-parallel\b|\bcollinear\b|\bplanes?\s*(\u03c0|pi|[12])\b/i.test(t)) {
+    scores['Vectors'] += 40;
+  }
+  if (/\bvectors?\b|\bplanes?\b|\bdirection vector\b|\bnormal vector\b|\bdot product\b|\bcross product\b|\bprojection\b|\bcoordinates.*planes?\b|\ba\.b\b|\bscalar product\b|\btwo planes\b|\bthe plane\b/i.test(t) || t.includes('\\mathbf') || t.includes('\\vec')) {
+    scores['Vectors'] += 25;
+  }
+
+  // Sequences and Series
+  if (/\barithmetic progression\b|\bgeometric progression\b|\bcommon ratio\b|\bcommon difference\b|\bsum to infinity\b|\bmathematical induction\b|\bbinomial expansion\b|\bbinomial theorem\b|\bmaclaurin\b|\bprove by induction\b|\bgeometric sequence\b|\barithmetic sequence\b|sequence.*arithmetic|sequence.*geometric/i.test(t)) {
+    scores['Sequences and Series'] += 40;
+  }
+  if (/\ba sequence\b|\bu_1\b|\bu_2\b|\bu_n\b|\bsequence u\b|\bap\/gp\b|\bfirst term a\b|\bs_n\b|\bu_\{?n\b|\bby induction\b|\bpositive integers n\b|\bstandard series\b|\bcompound interest\b|\binterest rate\b|\bstudy loan\b|\brepayment plan\b/i.test(t)) {
+    scores['Sequences and Series'] += 30;
+  }
+
+  // Probability and Statistics
+  if (/\bprobability\b|\brandom variable\b|\bnormal distribution\b|\bbinomial distribution\b|\bhypothesis test\b|\bnull hypothesis\b|\bpoisson\b|\bexpectation\b|\bvariance\b|\bunbiased estimate\b|\bsignificance level\b|\bcorrelation coefficient\b|\bregression line\b|\bscatter diagram\b/i.test(t)) {
+    scores['Probability and Statistics'] += 40;
+  }
+  if (/\bselected at random\b|\bwithout replacement\b|\bwith replacement\b|\bscore is the largest\b|\bfair dice\b|\bfair die\b|\bstandard deviation\b|\bsample mean\b|\bindependent events\b|\bmutually exclusive\b|\bsection b:\s*statistics\b|\bround table\b|\bcommittee\b|\bnumber of ways\b|\barrangements?\b|\bseating\b|\bsurvey\b|\bparticipants\b/i.test(t) || /p\([a-z]\s*\|\s*[a-z]\)/i.test(t) || /events\s+[a-z]\s+and\s+[a-z]/i.test(t)) {
+    scores['Probability and Statistics'] += 30;
+  }
+
+  // Calculus (Integrals, Derivatives, Differential Equations, Area & Volume)
+  if (/\bderivative\b|\bdifferentiate\b|\bdifferentiation\b|\bintegral\b|\bintegrate\b|\bintegration\b|\bdifferential equation\b|\btangent to the curve\b|\bnormal to the curve\b|\bstationary point\b|\bturning point\b|\bvolume of revolution\b|\bintegration by parts\b|\barea bounded by\b|\barea of the region bounded\b|\barea of region bounded\b/i.test(t)) {
+    scores['Calculus'] += 40;
+  }
+  if (/\bdy\/dx\b|\bd\^2y\/dx\^2\b|\bsec\^2\b|\bsubstitution\b|\bdx\b|\bdt\b|\bdefinite integral\b|\bmaximum volume\b|\brate of change\b|\brate of increase\b|\brate of decrease\b|\brate of flow\b|\bconnected rates\b/i.test(t) || t.includes('∫') || t.includes('\\int') || t.includes('')) {
+    scores['Calculus'] += 25;
+  }
+
+  // Functions and Graphs (Only Pure Graphs, Transformations, Inverses, Functions)
+  if (/\bcomposite function\b|\binverse function\b|\bdomain of f\b|\brange of f\b|\bone-one\b|\basymptotes?\b|\baxial intercepts?\b|\bsequence of transformations\b|\btransformation.*maps\b|\bfunctions?\s+f\s+and\s+g\b|\bf\s*:\s*x|\bg\s*:\s*x|\bf\^\{-?1\}|\bexists and find f\^\{-?1\}|\bdetermine whether.*one-one\b/i.test(t)) {
+    scores['Functions and Graphs'] += 40;
+  }
+  if (/\bsketch the graph\b|\bsketch the curve\b|\bthe curve c has equation\b|\bf\(x\)|\bfunction f\b|\bgraph of y\b|\bcurve has equation\b|\baxes, sketch\b|\bsolve the inequality\b|\binequality/i.test(t)) {
+    scores['Functions and Graphs'] += 15;
+  }
+
+  let bestChapter = 'Unclassified';
+  let maxScore = 0;
+  for (const [ch, sc] of Object.entries(scores)) {
+    if (sc > maxScore) {
+      maxScore = sc;
+      bestChapter = ch;
     }
   }
-  if (currentGroup.length > 0) {
-    paragraphs.push(currentGroup.join(' '));
+
+  if (bestChapter === 'Unclassified') {
+    return { chapter: 'Unclassified', subtopic: 'Unclassified' };
   }
 
-  return paragraphs
-    .map((p) =>
-      p
-        .replace(/\s+/g, ' ')
-        .replace(/\s+([,.:;?!])/g, '$1')
-        .replace(/\(\s+/g, '(')
-        .replace(/\s+\)/g, ')')
-        .replace(/\[\s+/g, '[')
-        .replace(/\s+\]/g, ']')
-        .replace(/\bintegral\b/gi, '∫')
-        .trim()
-    )
-    .filter(Boolean)
-    .join('\n\n');
+  let subtopic = bestChapter;
+  if (bestChapter === 'Functions and Graphs') {
+    if (/transform/i.test(t)) subtopic = 'Graphs and Transformations';
+    else if (/inverse|composite|domain|range/i.test(t)) subtopic = 'Functions';
+    else subtopic = 'Equations and Inequalities';
+  } else if (bestChapter === 'Sequences and Series') {
+    if (/induction/i.test(t)) subtopic = 'Mathematical Induction';
+    else if (/binomial/i.test(t)) subtopic = 'Binomial Series';
+    else subtopic = 'Arithmetic and Geometric Progressions';
+  } else if (bestChapter === 'Vectors') {
+    if (/plane/i.test(t)) subtopic = 'Lines and Planes in 3D';
+    else subtopic = 'Vectors';
+  } else if (bestChapter === 'Complex Numbers') {
+    if (/argand|locus|loci/i.test(t)) subtopic = 'Argand Diagrams and Loci';
+    else if (/root|polynomial/i.test(t)) subtopic = 'Roots of Polynomials';
+    else subtopic = 'Complex Numbers';
+  } else if (bestChapter === 'Calculus') {
+    if (/differential equation/i.test(t)) subtopic = 'Differential Equations';
+    else if (/integral|integrate|area|volume/i.test(t)) subtopic = 'Definite Integrals & Applications';
+    else subtopic = 'Differentiation & Applications';
+  } else if (bestChapter === 'Probability and Statistics') {
+    if (/hypothesis|null hypothesis/i.test(t)) subtopic = 'Hypothesis Testing';
+    else if (/normal/i.test(t)) subtopic = 'Normal Distribution';
+    else if (/correlation|regression/i.test(t)) subtopic = 'Linear Regression';
+    else subtopic = 'Probability and Random Variables';
+  }
+
+  return { chapter: bestChapter, subtopic };
 }
 
 function scoreQuestion(q: any): number {
@@ -204,33 +206,18 @@ function scoreQuestion(q: any): number {
   const t = q.text_content || '';
   const qid = q.id || '';
 
-  // Boost curated questions
   if (CURATED_QUESTIONS[qid]) score += 1000;
-
-  // Boost questions with LaTeX
   if (t.includes('$')) score += 200;
   if (t.includes('\\frac')) score += 50;
   if (t.includes('\\int')) score += 50;
   if (t.includes('\\mathbf')) score += 50;
   if (t.includes('\\mathrm')) score += 30;
 
-  // Boost questions from real papers with verified diagrams and subparts
-  if (qid.startsWith('jpjc-2022') || qid.startsWith('ejc-2022') || qid.startsWith('dhs-2022')) {
-    score += 150;
-  }
-
-  // Structure boosts
   if (t.includes('(i)')) score += 20;
   if (t.includes('(ii)')) score += 20;
   if (t.includes('[') && t.includes(']')) score += 10;
   if (/^[A-Z]/.test(t) || /^\([a-z0-9]+\)/i.test(t)) score += 10;
 
-  // Penalties
-  if (/©[A-Z]+/i.test(t)) score -= 100;
-  if (/\[Turn over/i.test(t)) score -= 100;
-  if (/\b\w\s+\w\s+\w\s*=\s*\+/i.test(t)) score -= 150;
-  if (/\(\)\s*\d/i.test(t)) score -= 150;
-  if (/sec\s+d\s+x/i.test(t)) score -= 150;
   if (t.length < 35) score -= 100;
   if (t.length > 2000) score -= 200;
 
@@ -284,7 +271,7 @@ const CHAPTER_CONFIGS = [
 
 async function main() {
   console.log('================================================================');
-  console.log('  PAPERFORGE — CURATE, ENHANCE & PRIORITIZE WORKSHEETS');
+  console.log('  PAPERFORGE — RECLASSIFY, SANITIZE & COMPILE CHAPTER WORKSHEETS');
   console.log('================================================================\n');
 
   console.log('[+] Fetching all questions from Supabase PostgreSQL...');
@@ -303,65 +290,90 @@ async function main() {
   }
   console.log(`[i] Retrieved ${allQuestions.length} total questions.`);
 
-  // 1. Sanitize & Apply Curated LaTeX
-  const sanitizedList: any[] = [];
-  let updatedCount = 0;
+  // 1. Reclassify & Filter out clumped full pages
+  const localStorePath = path.resolve(process.cwd(), 'packages', 'db', '.paperforge-store.json');
+  const localStore = fs.existsSync(localStorePath) ? JSON.parse(fs.readFileSync(localStorePath, 'utf-8')) : null;
+  const localQuestionsMap = new Map((localStore?.questions || []).map((q: any) => [q.id, q]));
+
+  const updatedQuestions: any[] = [];
+  let excludedCount = 0;
+  let reclassifiedCount = 0;
+
   for (const q of allQuestions) {
-    const cleanText = cleanTextContent(q.text_content, q.id);
-    const isExcluded = q.status === 'EXCLUDED' || cleanText.length < 20 || cleanText.length > 2200;
-    sanitizedList.push({
+    const localQ = localQuestionsMap.get(q.id);
+    const rawText = (localQ?.textContent && localQ.textContent.length > 25)
+      ? localQ.textContent
+      : (q.text_content || '');
+    const cleanText = cleanTextContent(rawText, q.id);
+    const validCrop = isIsolatedCrop(q.id);
+    const { chapter, subtopic } = classifyQuestionText(cleanText);
+
+    if (!validCrop || cleanText.length < 20 || chapter === 'Unclassified') {
+      updatedQuestions.push({
+        ...q,
+        chapter: chapter !== 'Unclassified' ? chapter : q.chapter,
+        subtopic: chapter !== 'Unclassified' ? subtopic : q.subtopic,
+        text_content: cleanText,
+        status: 'EXCLUDED',
+      });
+      excludedCount++;
+      continue;
+    }
+
+    if (chapter !== q.chapter) {
+      reclassifiedCount++;
+    }
+
+    updatedQuestions.push({
       ...q,
+      chapter,
+      subtopic,
       text_content: cleanText,
-      status: isExcluded ? 'EXCLUDED' : 'READY',
+      status: 'READY',
     });
-    if (cleanText !== q.text_content) updatedCount++;
   }
 
-  console.log(`[+] Updating ${sanitizedList.length} questions in Supabase in batches of 100...`);
-  for (let i = 0; i < sanitizedList.length; i += 100) {
-    const batch = sanitizedList.slice(i, i + 100);
+  console.log(`[i] Processed: ${updatedQuestions.length} total questions.`);
+  console.log(`    Excluded (clumped full pages or <20 chars): ${excludedCount}`);
+  console.log(`    Reclassified into authentic syllabus chapters: ${reclassifiedCount}`);
+
+  console.log(`[+] Updating questions in Supabase PostgreSQL in batches of 100...`);
+  for (let i = 0; i < updatedQuestions.length; i += 100) {
+    const batch = updatedQuestions.slice(i, i + 100);
     const { error } = await supabase.from('questions').upsert(batch, { onConflict: 'id' });
     if (error) {
-      console.error(`Error in batch ${i}-${i + 100}:`, error.message);
+      console.error(`Error updating questions batch ${i}:`, error.message);
     }
   }
   console.log(`[✓] Supabase questions updated successfully.\n`);
 
-  // 2. Filter clean questions & group by chapter
-  const cleanQuestions = sanitizedList.filter((q) => q.status === 'READY');
-  console.log(`[i] Active clean questions for compendiums: ${cleanQuestions.length}`);
-
+  // 2. Group clean questions by authentic chapter
+  const cleanQuestions = updatedQuestions.filter((q) => q.status === 'READY');
   const questionsByChapter = new Map<string, any[]>();
   for (const q of cleanQuestions) {
-    const ch = q.chapter;
-    if (!questionsByChapter.has(ch)) {
-      questionsByChapter.set(ch, []);
+    if (!questionsByChapter.has(q.chapter)) {
+      questionsByChapter.set(q.chapter, []);
     }
-    questionsByChapter.get(ch)!.push(q);
+    questionsByChapter.get(q.chapter)!.push(q);
   }
 
-  // 3. Clear existing worksheet_questions and re-seed with prioritized order
-  console.log('[+] Rebuilding worksheet_questions with academic quality sorting...');
+  // 3. Clear existing worksheets and worksheet_questions in Supabase
+  console.log('[+] Rebuilding worksheets and worksheet_questions...');
   await supabase.from('worksheet_questions').delete().neq('worksheet_id', '');
   await supabase.from('worksheets').delete().neq('id', '');
 
   const nowIso = new Date().toISOString();
+  const compiledWorksheets: any[] = [];
 
   for (const cfg of CHAPTER_CONFIGS) {
     const rawList = questionsByChapter.get(cfg.chapter) || [];
 
-    // Score and sort questions so high-quality, authentic LaTeX questions appear first
     const sortedQuestions = rawList.map((q) => ({
       ...q,
       score: scoreQuestion(q),
     }));
 
     sortedQuestions.sort((a, b) => b.score - a.score);
-
-    console.log(`[>] Compiling ${cfg.worksheetNumber}: "${cfg.chapter}" (${sortedQuestions.length} questions)...`);
-    console.log(`    Top question #1: [${sortedQuestions[0]?.id}] (score ${sortedQuestions[0]?.score})`);
-    console.log(`    Top question #2: [${sortedQuestions[1]?.id}] (score ${sortedQuestions[1]?.score})`);
-    console.log(`    Top question #3: [${sortedQuestions[2]?.id}] (score ${sortedQuestions[2]?.score})`);
 
     const totalMarks = sortedQuestions.reduce((sum, q) => sum + (q.marks || 0), 0);
     const schools = Array.from(
@@ -409,11 +421,48 @@ async function main() {
       }
     }
 
-    console.log(`[✓] ${cfg.worksheetNumber} successfully persisted: ${sortedQuestions.length} questions, ${totalMarks} marks.\n`);
+    compiledWorksheets.push({
+      ...worksheetRow,
+      manifest: {
+        worksheetId: cfg.id,
+        questions: sortedQuestions.map((q) => q.id),
+      },
+    });
+
+    console.log(`[✓] ${cfg.worksheetNumber} [${cfg.chapter}]: ${sortedQuestions.length} questions, ${totalMarks} marks.`);
+    console.log(`    Top #1: ${sortedQuestions[0]?.id} (${sortedQuestions[0]?.subtopic})`);
+    console.log(`    Top #2: ${sortedQuestions[1]?.id} (${sortedQuestions[1]?.subtopic})`);
+    console.log(`    Top #3: ${sortedQuestions[2]?.id} (${sortedQuestions[2]?.subtopic})`);
   }
 
-  console.log('================================================================');
-  console.log('  ALL CHAPTER COMPENDIUMS SUCCESSFULLY CURATED & PRIORITIZED!');
+  // 4. Update local .paperforge-store.json
+  const storeFilePath = path.resolve(process.cwd(), 'packages', 'db', '.paperforge-store.json');
+  if (fs.existsSync(storeFilePath)) {
+    const storeData = JSON.parse(fs.readFileSync(storeFilePath, 'utf-8'));
+    const qMap = new Map(updatedQuestions.map((q) => [q.id, q]));
+
+    storeData.questions = (storeData.questions || []).map((q: any) => {
+      const up = qMap.get(q.id);
+      if (up) {
+        return {
+          ...q,
+          chapter: up.chapter,
+          subtopic: up.subtopic,
+          textContent: up.text_content,
+          status: up.status,
+          diagramUrl: `/questions/${q.id}.png`,
+        };
+      }
+      return q;
+    });
+
+    storeData.worksheets = compiledWorksheets;
+    fs.writeFileSync(storeFilePath, JSON.stringify(storeData, null, 2));
+    console.log('\n[✓] Local .paperforge-store.json synchronized successfully.');
+  }
+
+  console.log('\n================================================================');
+  console.log('  RECLASSIFICATION AND CHAPTER COMPILATION COMPLETE!');
   console.log('================================================================\n');
 }
 

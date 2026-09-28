@@ -140,8 +140,8 @@ export async function syncWorksheetsFromDb(store: PaperForgeDataStore, force = f
 
   try {
     const [wsRes, wqRes] = await Promise.all([
-      supabase.from('worksheets').select('*').order('generated_at', { ascending: false }),
-      supabase.from('worksheet_questions').select('*').order('position', { ascending: true }),
+      supabase.from('worksheets').select('*').order('worksheet_number', { ascending: true }),
+      supabase.from('worksheet_questions').select('*').order('position', { ascending: true }).range(0, 5000),
     ]);
 
     const data = wsRes.data;

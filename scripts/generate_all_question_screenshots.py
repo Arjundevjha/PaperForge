@@ -75,7 +75,7 @@ def find_markers_sequential(doc):
             for l in b['lines']:
                 y0, y1 = l['bbox'][1], l['bbox'][3]
                 x0, x1 = l['bbox'][0], l['bbox'][2]
-                if y0 < 45 or y1 > 780:
+                if y0 < 25 or y1 > 790:
                     continue
 
                 line_text = ''.join(s['text'] for s in l['spans']).strip()
@@ -113,15 +113,15 @@ def find_markers_sequential(doc):
 
 def crop_question(doc, qnum, markers, sorted_qnums):
     """
-    Crops the exact region for a question, including its equations and diagrams.
-    If the question spans across two pages, stitches both page regions seamlessly.
+    Crops the exact region for a single question, including its equations and diagrams.
+    Returns (Image, extracted_text). Never clumps multiple questions or entire pages.
     """
     if qnum not in markers:
-        return None
+        return None, ''
 
     m = markers[qnum]
     p_idx = m['page']
-    start_y = max(45.0, m['y0'] - 4.0)
+    start_y = max(25.0, m['y0'] - 4.0)
 
     # Determine end_y
     next_idx = sorted_qnums.index(qnum) + 1 if qnum in sorted_qnums else -1
@@ -136,37 +136,47 @@ def crop_question(doc, qnum, markers, sorted_qnums):
         else:
             # Question runs to end of current page before footer
             page = doc[p_idx]
-            blocks = [b for b in page.get_text('blocks') if b[1] >= m['y0'] and b[3] <= 775 and b[4].strip()]
-            last_y1 = max((b[3] for b in blocks), default=760.0)
-            end_y = min(772.0, last_y1 + 4.0)
+            footer_pat = re.compile(r'©|Turn\s+over|Prelim|\bpage\b|^\s*\d+\s*$', re.I)
+            blocks = [
+                b for b in page.get_text('blocks')
+                if b[1] >= m['y0'] and b[3] <= 750 and b[4].strip() and not footer_pat.search(b[4].strip())
+            ]
+            last_y1 = max((b[3] for b in blocks), default=m['y0'] + 120.0)
+            end_y = min(760.0, last_y1 + 4.0)
     else:
         # Last question
         page = doc[p_idx]
-        blocks = [b for b in page.get_text('blocks') if b[1] >= m['y0'] and b[3] <= 775 and b[4].strip()]
-        last_y1 = max((b[3] for b in blocks), default=760.0)
-        end_y = min(772.0, last_y1 + 4.0)
+        footer_pat = re.compile(r'©|Turn\s+over|Prelim|\bpage\b|^\s*\d+\s*$', re.I)
+        blocks = [
+            b for b in page.get_text('blocks')
+            if b[1] >= m['y0'] and b[3] <= 750 and b[4].strip() and not footer_pat.search(b[4].strip())
+        ]
+        last_y1 = max((b[3] for b in blocks), default=m['y0'] + 120.0)
+        end_y = min(760.0, last_y1 + 4.0)
 
     if end_y - start_y < 40:
-        end_y = min(772.0, start_y + 140)
+        end_y = min(760.0, start_y + 140)
 
     page = doc[p_idx]
     rect = fitz.Rect(45, start_y, 560, end_y)
     pix1 = page.get_pixmap(clip=rect, dpi=200)
     img1 = Image.frombytes("RGB", [pix1.width, pix1.height], pix1.samples)
+    text1 = page.get_text('text', clip=rect)
 
     # If the question continues onto the next page before the next question starts
-    if not has_next_same_page and next_m is not None and next_m['page'] == p_idx + 1 and next_m['y0'] > 115:
+    if not has_next_same_page and next_m is not None and next_m['page'] == p_idx + 1 and next_m['y0'] > 90:
         page2 = doc[p_idx + 1]
-        rect2 = fitz.Rect(45, 52.0, 560, min(772.0, next_m['y0'] - 4.0))
+        rect2 = fitz.Rect(45, 25.0, 560, min(772.0, next_m['y0'] - 4.0))
         pix2 = page2.get_pixmap(clip=rect2, dpi=200)
         img2 = Image.frombytes("RGB", [pix2.width, pix2.height], pix2.samples)
+        text2 = page2.get_text('text', clip=rect2)
 
         combined = Image.new("RGB", (max(img1.width, img2.width), img1.height + img2.height + 10), (255, 255, 255))
         combined.paste(img1, (0, 0))
         combined.paste(img2, (0, img1.height + 10))
-        return trim_whitespace(combined)
+        return trim_whitespace(combined), (text1 + '\n' + text2).strip()
 
-    return trim_whitespace(img1)
+    return trim_whitespace(img1), text1.strip()
 
 def main():
     print('================================================================')
@@ -222,31 +232,30 @@ def main():
 
             out_file = os.path.join(OUTPUT_DIR, f'{qid}.png')
 
-            img = crop_question(doc, qn, markers, sorted_qnums)
+            img, crop_text = crop_question(doc, qn, markers, sorted_qnums)
             if img and img.width > 20 and img.height > 20:
                 try:
                     img.save(out_file, optimize=True)
                     q['diagramUrl'] = f'/questions/{qid}.png'
+                    if len(crop_text) > 15:
+                        q['textContent'] = crop_text
                     total_success += 1
-                except Exception:
-                    img = None
-
-            if not img or img.width <= 20 or img.height <= 20:
-                # Fallback: crop proportional page from paper
-                p_fallback = min(len(doc) - 1, max(0, qn - 1))
-                page = doc[p_fallback]
-                pix = page.get_pixmap(clip=fitz.Rect(45, 55, 560, 750), dpi=180)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                img = trim_whitespace(img)
-                try:
-                    img.save(out_file, optimize=True)
-                except Exception:
-                    pix.save(out_file)
-                q['diagramUrl'] = f'/questions/{qid}.png'
+                except Exception as e:
+                    print(f'Error saving {qid}: {e}')
+            else:
                 total_fallback += 1
+                # If existing file is a full-page clumped capture, remove it so it cannot contaminate worksheets
+                if os.path.exists(out_file):
+                    try:
+                        from PIL import Image
+                        with Image.open(out_file) as existing:
+                            if existing.height > 1350:
+                                os.remove(out_file)
+                    except Exception:
+                        pass
 
         if idx % 20 == 0 or idx == len(by_fn):
-            print(f'[{idx}/{len(by_fn)}] Papers processed: {total_success} cropped, {total_fallback} fallback.')
+            print(f'[{idx}/{len(by_fn)}] Papers processed: {total_success} cropped, {total_fallback} un-isolated.')
 
     print(f'\n[✓] All questions processed: {total_success} high-res crops, {total_fallback} page captures.')
     print(f'[+] Updating {STORE_PATH} with screenshot references...')
