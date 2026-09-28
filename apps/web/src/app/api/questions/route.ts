@@ -7,6 +7,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawSubject = searchParams.get('subject');
   const rawSchool = searchParams.get('school');
+  const chapter = searchParams.get('chapter') || undefined;
   const search = searchParams.get('search') || undefined;
 
   const parsedSubject = rawSubject ? SubjectIdSchema.safeParse(rawSubject) : null;
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
   const questions = store.listQuestions({
     subject: parsedSubject?.data,
     school: parsedSchool?.data,
+    chapter,
     search: search ? search.slice(0, 100) : undefined,
   });
 
