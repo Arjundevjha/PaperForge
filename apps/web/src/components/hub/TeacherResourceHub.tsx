@@ -508,18 +508,27 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                               <CheckCircle2 size={12} />
                               <span>Official Cambridge Mark Scheme & Verbatim Working:</span>
                             </div>
-                            <div className="text-black text-[11px] leading-relaxed">
+
+                            {/* Authentic High-Resolution Answer Screenshot */}
+                            <div className="my-2 flex justify-center bg-white rounded">
+                              <img
+                                src={ans.diagramUrl || `/answers/${q.id}.png`}
+                                alt={`Solution for Question ${idx + 1}`}
+                                className="max-w-full h-auto object-contain rounded border border-green-300 shadow-xs"
+                                loading="lazy"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLElement).style.display = 'none';
+                                  const fallbackAnsEl = document.getElementById(`fallback-ans-${q.id}`);
+                                  if (fallbackAnsEl) fallbackAnsEl.style.display = 'block';
+                                }}
+                              />
+                            </div>
+
+                            {/* Fallback formatted text if screenshot not available */}
+                            <div id={`fallback-ans-${q.id}`} style={{ display: 'none' }} className="text-black text-[11px] leading-relaxed">
                               <MathRenderer content={ans.answerContent} />
                             </div>
-                            {ans.diagramUrl && (
-                              <div className="my-2.5 flex justify-center">
-                                <img
-                                  src={ans.diagramUrl}
-                                  alt={`Mark Scheme Diagram for Question ${idx + 1}`}
-                                  className="max-h-64 max-w-full object-contain border border-green-300 rounded p-1 bg-white shadow-sm"
-                                />
-                              </div>
-                            )}
+
                             {ans.markSchemeNotes && (
                               <div className="mt-2 text-[10px] italic text-[#14532d] border-t border-[#bbf7d0] pt-1.5">
                                 Examiner Notes: {ans.markSchemeNotes}

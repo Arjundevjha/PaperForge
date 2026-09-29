@@ -158,12 +158,13 @@ export async function compileWorksheetDocuments(
     answers: questions.map((q) => {
       const a = answerMap.get(q.id)!;
       return {
+        questionId: q.id,
         questionNumber: q.questionNumber,
         answerContent: a.answerContent,
         markSchemeNotes: a.markSchemeNotes,
         marks: q.marks,
         citation: a.provenance.citation,
-        diagramUrl: a.diagramUrl,
+        diagramUrl: a.diagramUrl || `/answers/${q.id}.png`,
       };
     }),
   });

@@ -31,6 +31,7 @@ export interface AnswerKeyInput {
   marks?: number | null;
   citation: string;
   diagramUrl?: string;
+  questionId?: string;
 }
 
 export interface AnswerKeyOptions {
@@ -58,6 +59,33 @@ function resolveDiagramPath(diagramUrl?: string): string | null {
     }
   }
   return null;
+}
+
+function resolveAnswerSlices(questionId?: string, diagramUrl?: string): string[] {
+  const slices: string[] = [];
+  if (questionId) {
+    let sIdx = 1;
+    while (sIdx <= 8) {
+      const cand = resolveDiagramPath(`/answers/${questionId}_${sIdx}.png`);
+      if (cand) {
+        slices.push(cand);
+        sIdx++;
+      } else {
+        break;
+      }
+    }
+    if (slices.length > 0) return slices;
+
+    const mainCand = resolveDiagramPath(`/answers/${questionId}.png`);
+    if (mainCand) return [mainCand];
+  }
+
+  if (diagramUrl) {
+    const mainCand = resolveDiagramPath(diagramUrl);
+    if (mainCand) return [mainCand];
+  }
+
+  return [];
 }
 
 function cleanLatexForPdf(text: string): string {
@@ -496,16 +524,96 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
 
     y -= 14;
 
-    // Answer Content wrapped lines
-    const sanitizedAnswer = sanitizeForPdf(a.answerContent);
-    const rawLines = sanitizedAnswer.split('\n');
-    for (const rawLine of rawLines) {
-      const words = rawLine.split(/\s+/).filter(Boolean);
-      let line = '';
-      for (const word of words) {
-        const testLine = line ? `${line} ${word}` : word;
-        const width = fontRegular.widthOfTextAtSize(testLine, 9.5);
-        if (width > CONTENT_WIDTH - 30) {
+    const slicePaths = resolveAnswerSlices(a.questionId, a.diagramUrl);
+    let embeddedScreenshot = false;
+
+    if (slicePaths.length > 0) {
+      try {
+        for (const slicePath of slicePaths) {
+          const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ slicePath);
+          const img = await doc.embedPng(imageBytes);
+
+          const targetWidth = CONTENT_WIDTH - 20;
+          let scaledHeight = (img.height / img.width) * targetWidth;
+          const maxSliceHeight = A4_HEIGHT - 130;
+          let drawWidth = targetWidth;
+
+          if (scaledHeight > maxSliceHeight) {
+            const ratio = maxSliceHeight / scaledHeight;
+            scaledHeight = maxSliceHeight;
+            drawWidth = targetWidth * ratio;
+          }
+
+          if (y - scaledHeight < 60) {
+            page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
+            y = A4_HEIGHT - 60;
+          }
+
+          page.drawImage(img, {
+            x: MARGIN_LEFT + (CONTENT_WIDTH - drawWidth) / 2,
+            y: y - scaledHeight,
+            width: drawWidth,
+            height: scaledHeight,
+          });
+          y -= scaledHeight + 10;
+        }
+        embeddedScreenshot = true;
+      } catch {
+        embeddedScreenshot = false;
+      }
+    }
+
+    if (!embeddedScreenshot) {
+      // Clean fallback: collapse single-character lines and wrap paragraphs
+      const sanitizedAnswer = sanitizeForPdf(a.answerContent || '');
+      // Reflow lines: collapse lines that are <= 4 chars (equations broken across lines)
+      const reflowed = sanitizedAnswer
+        .split('\n')
+        .reduce((acc: string[], cur: string) => {
+          const trimmed = cur.trim();
+          if (!trimmed) {
+            acc.push('');
+            return acc;
+          }
+          if (acc.length === 0 || acc[acc.length - 1] === '') {
+            acc.push(trimmed);
+          } else if (trimmed.length <= 4 || acc[acc.length - 1].length <= 4) {
+            acc[acc.length - 1] += ' ' + trimmed;
+          } else {
+            acc.push(trimmed);
+          }
+          return acc;
+        }, []);
+
+      for (const rawLine of reflowed) {
+        if (!rawLine.trim()) {
+          y -= 6;
+          continue;
+        }
+        const words = rawLine.split(/\s+/).filter(Boolean);
+        let line = '';
+        for (const word of words) {
+          const testLine = line ? `${line} ${word}` : word;
+          const width = fontRegular.widthOfTextAtSize(testLine, 9.5);
+          if (width > CONTENT_WIDTH - 30) {
+            page.drawText(line, {
+              x: MARGIN_LEFT + 15,
+              y,
+              size: 9.5,
+              font: fontRegular,
+              color: rgb(0.1, 0.1, 0.1),
+            });
+            line = word;
+            y -= 13;
+            if (y < 90) {
+              page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
+              y = A4_HEIGHT - 60;
+            }
+          } else {
+            line = testLine;
+          }
+        }
+        if (line) {
           page.drawText(line, {
             x: MARGIN_LEFT + 15,
             y,
@@ -513,57 +621,11 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
             font: fontRegular,
             color: rgb(0.1, 0.1, 0.1),
           });
-          line = word;
           y -= 13;
           if (y < 90) {
             page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
             y = A4_HEIGHT - 60;
           }
-        } else {
-          line = testLine;
-        }
-      }
-      if (line) {
-        page.drawText(line, {
-          x: MARGIN_LEFT + 15,
-          y,
-          size: 9.5,
-          font: fontRegular,
-          color: rgb(0.1, 0.1, 0.1),
-        });
-        y -= 13;
-        if (y < 90) {
-          page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
-          y = A4_HEIGHT - 60;
-        }
-      }
-    }
-
-    if (a.diagramUrl) {
-      const diagramFilePath = resolveDiagramPath(a.diagramUrl);
-      if (diagramFilePath) {
-        try {
-          const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ diagramFilePath);
-          const img = await doc.embedPng(imageBytes);
-          const maxImgWidth = CONTENT_WIDTH - 60;
-          const maxImgHeight = 150;
-          const dims = img.scaleToFit(maxImgWidth, maxImgHeight);
-
-          if (y - dims.height < 90) {
-            page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
-            y = A4_HEIGHT - 60;
-          }
-
-          y -= 4;
-          page.drawImage(img, {
-            x: MARGIN_LEFT + (CONTENT_WIDTH - dims.width) / 2,
-            y: y - dims.height,
-            width: dims.width,
-            height: dims.height,
-          });
-          y -= dims.height + 10;
-        } catch {
-          // Graceful fallback
         }
       }
     }
@@ -590,7 +652,17 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
       color: rgb(0.4, 0.4, 0.4),
     });
 
-    y -= 20;
+    y -= 14;
+
+    // Divider line between question solutions
+    page.drawLine({
+      start: { x: MARGIN_LEFT + 10, y },
+      end: { x: A4_WIDTH - MARGIN_RIGHT - 10, y },
+      thickness: 0.5,
+      color: rgb(0.85, 0.85, 0.85),
+    });
+
+    y -= 16;
   }
 
   return await doc.save();

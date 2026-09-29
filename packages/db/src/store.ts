@@ -110,7 +110,21 @@ export class PaperForgeDataStore {
         for (const a of data.answers) this.answers.set(a.questionId, a);
       }
       if (Array.isArray(data.worksheets)) {
-        for (const w of data.worksheets) this.worksheets.set(w.id, w);
+        for (const w of data.worksheets) {
+          if (!w.worksheetNumber && w.worksheet_number) {
+            w.worksheetNumber = w.worksheet_number;
+          }
+          if (!w.questionCount && w.question_count) {
+            w.questionCount = w.question_count;
+          }
+          if (!w.totalMarks && w.total_marks) {
+            w.totalMarks = w.total_marks;
+          }
+          if (!w.sourceCoverage && w.source_coverage) {
+            w.sourceCoverage = w.source_coverage;
+          }
+          this.worksheets.set(w.id, w);
+        }
       }
       if (Array.isArray(data.reviewItems)) {
         for (const r of data.reviewItems) this.reviewItems.set(r.id, r);
@@ -288,7 +302,11 @@ export class PaperForgeDataStore {
     if (subject) {
       list = list.filter((w) => w.subject === subject);
     }
-    return list.sort((a, b) => a.worksheetNumber.localeCompare(b.worksheetNumber));
+    return list.sort((a, b) =>
+      (a.worksheetNumber || (a as any).worksheet_number || '').localeCompare(
+        b.worksheetNumber || (b as any).worksheet_number || ''
+      )
+    );
   }
 
   getWorksheetById(id: string): Worksheet | undefined {
