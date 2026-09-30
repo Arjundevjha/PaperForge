@@ -60,6 +60,8 @@
 | **Store Normalization** | `packages/db/src/store.ts` | Active & Verified | Normalizes `worksheet_number` and safe sort in `listWorksheets` |
 | **Teacher Resource Hub** | `apps/web/src/components/hub/TeacherResourceHub.tsx` | Active & Verified | Displays authentic solution screenshot in marking scheme toggle |
 | **Answer Image Assets** | `apps/web/public/answers/` | Active & Verified | 2,461 200-DPI PNG solution slices and composite images |
+| **Workspace Project Rule** | `.agents/rules/exam-compilation-standards.md` | Active & Persisted | Strict text-for-classification, screenshots-for-compilation invariants |
+| **Workspace Project Skill** | `.agents/skills/exam-document-screenshot-compiler/SKILL.md` | Active & Persisted | End-to-end pairing, monotonic parsing, and multi-slice pagination engine |
 
 ---
 
@@ -71,12 +73,12 @@
 - **Unit & Pipeline Tests**: **38/38 passing tests** (`0.29s`).
 - **Fallow Dead-Code Audit**: **0 issues found** across 55 entry points (`0.05s`).
 - **Next.js Production Build**: Turbopack compiled successfully with 0 errors in `944ms` across all 15 routes.
+- **Customizations**: Project rule & skill persisted to `.agents/` and committed to `main`.
 - **npm audit**: **0 vulnerabilities**.
 
 ---
 
 ## 4. Immediate Next Steps
 
-1. Batch commit all updated files and push to `main`.
-2. Monitor Vercel deployment at `https://paperforge-omega.vercel.app`.
-3. Prune old preview deployments to maintain the 4-build buffer.
+1. Verify live deployment at `https://paperforge-omega.vercel.app`.
+2. Ready for next user feature requests or exam paper ingestions.
