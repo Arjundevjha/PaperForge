@@ -78,6 +78,7 @@ def resolve_solution_file(qp_fn, paper_num=None):
         (r'_Qn_', '_Soln_'),
         (r'_\(QP\)_', '_(Soln)_'),
         (r'_\(Qn\)_', '_(Soln)_'),
+        (r'_\(Qn\)_', '_(Solutions)_'),
         (r'_\(QP\)_', '_Solutions_'),
         (r'_QP\.', '_Solutions.'),
         (r'_Qn\.', '_Soln.'),
@@ -93,6 +94,7 @@ def resolve_solution_file(qp_fn, paper_num=None):
 
     # 3. Strict metadata match against candidate solution files
     sol_cands = []
+    is_promo_qp = qp_meta['typ'] == 'promo' or 'promo' in qp_fn.lower()
     for cand in ALL_PDFS:
         if cand == qp_fn:
             continue
@@ -101,14 +103,22 @@ def resolve_solution_file(qp_fn, paper_num=None):
             continue
         c_meta = extract_meta(cand)
 
+        is_promo_cand = c_meta['typ'] == 'promo' or 'promo' in cand_lower
+
+        # Strict separation: Promo must match Promo; Prelim must match Prelim
+        if is_promo_qp and not is_promo_cand:
+            continue
+        if not is_promo_qp and is_promo_cand:
+            continue
+
         # School must match
         if qp_meta['sch'] and c_meta['sch'] and qp_meta['sch'] != c_meta['sch']:
             continue
         # Year must match
         if qp_meta['yr'] and c_meta['yr'] and qp_meta['yr'] != c_meta['yr']:
             continue
-        # Paper (P1 vs P2) must match
-        if qp_meta['p'] and c_meta['p'] and qp_meta['p'] != c_meta['p']:
+        # Paper (P1 vs P2) must match for non-promo papers
+        if not is_promo_qp and qp_meta['p'] and c_meta['p'] and qp_meta['p'] != c_meta['p']:
             continue
 
         score = 0
@@ -116,9 +126,11 @@ def resolve_solution_file(qp_fn, paper_num=None):
             score += 50
         if qp_meta['yr'] and c_meta['yr'] == qp_meta['yr']:
             score += 40
-        if qp_meta['p'] and c_meta['p'] == qp_meta['p']:
+        if not is_promo_qp and qp_meta['p'] and c_meta['p'] == qp_meta['p']:
             score += 40
-        if qp_meta['typ'] and c_meta['typ'] == qp_meta['typ']:
+        if is_promo_qp and is_promo_cand:
+            score += 50
+        elif qp_meta['typ'] and c_meta['typ'] == qp_meta['typ']:
             score += 20
         if qp_meta['num'] and c_meta['num']:
             diff = abs(qp_meta['num'] - c_meta['num'])
@@ -217,7 +229,7 @@ def find_solution_markers(doc, start_p=0, end_p=None):
 
     return resolved
 
-def trim_whitespace(img, padding=12):
+def trim_whitespace(img, padding=24):
     if img is None:
         return None
     try:
@@ -245,7 +257,7 @@ def crop_solution_slices(doc, qnum, markers, max_p=None):
 
     m = markers[qnum]
     start_p = m['page']
-    start_y = max(30.0, m['y0'] - 6.0)
+    start_y = max(20.0, m['y0'] - 16.0)
 
     sorted_qs = sorted(markers.keys())
     idx = sorted_qs.index(qnum)
@@ -315,8 +327,13 @@ def main():
             missing_count += 1
             continue
 
-        paper_num = q.get('provenance', {}).get('paperNumber')
-        if not paper_num:
+        is_promo = (
+            q.get('provenance', {}).get('paperType') == 'PROMO'
+            or 'promo' in qp_fn.lower()
+            or 'promo' in qid.lower()
+        )
+        paper_num = None if is_promo else q.get('provenance', {}).get('paperNumber')
+        if not paper_num and not is_promo:
             m_p = re.search(r'-p([12])-q', qid)
             paper_num = int(m_p.group(1)) if m_p else 1
 

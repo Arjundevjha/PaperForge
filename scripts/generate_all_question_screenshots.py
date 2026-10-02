@@ -23,10 +23,10 @@ INVALID_FOLLOWERS = set([
     'm', 's', 'k', 'cm', 'kg', 'mm'
 ])
 
-def trim_whitespace(img, padding=12):
+def trim_whitespace(img, padding=24):
     """
     Trims excessive white margins around a rendered question image.
-    Leaves clean padding around the active content.
+    Leaves generous padding around the active content to protect tall accents.
     """
     if img is None:
         return None
@@ -121,7 +121,7 @@ def crop_question(doc, qnum, markers, sorted_qnums):
 
     m = markers[qnum]
     p_idx = m['page']
-    start_y = max(25.0, m['y0'] - 4.0)
+    start_y = max(20.0, m['y0'] - 16.0)
 
     # Determine end_y
     next_idx = sorted_qnums.index(qnum) + 1 if qnum in sorted_qnums else -1
@@ -132,7 +132,7 @@ def crop_question(doc, qnum, markers, sorted_qnums):
         next_m = markers[sorted_qnums[next_idx]]
         if next_m['page'] == p_idx:
             has_next_same_page = True
-            end_y = min(775.0, next_m['y0'] - 4.0)
+            end_y = min(775.0, next_m['y0'] - 14.0)
         else:
             # Question runs to end of current page before footer
             page = doc[p_idx]

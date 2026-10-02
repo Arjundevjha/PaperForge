@@ -32,6 +32,7 @@ export interface AnswerKeyInput {
   citation: string;
   diagramUrl?: string;
   questionId?: string;
+  displayProvenance?: string;
 }
 
 export interface AnswerKeyOptions {
@@ -301,8 +302,8 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
       try {
         const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ diagramFilePath);
         const img = await doc.embedPng(imageBytes);
-        const maxImgWidth = CONTENT_WIDTH - 20;
-        const maxImgHeight = 520;
+        const maxImgWidth = CONTENT_WIDTH;
+        const maxImgHeight = 580;
         const dims = img.scaleToFit(maxImgWidth, maxImgHeight);
 
         if (y - dims.height < 90) {
@@ -504,10 +505,15 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
     }
 
     // Answer Question Header
-    page.drawText(`Solution for Q${a.questionNumber}`, {
+    const provCitation = a.displayProvenance || a.citation;
+    const headerTitle = provCitation
+      ? sanitizeForPdf(`Solution for Q${a.questionNumber}  •  ${provCitation}`)
+      : `Solution for Q${a.questionNumber}`;
+
+    page.drawText(headerTitle, {
       x: MARGIN_LEFT,
       y,
-      size: 10,
+      size: 9.5,
       font: fontSansBold,
       color: rgb(0.1, 0.25, 0.45),
     });
@@ -533,7 +539,7 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
           const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ slicePath);
           const img = await doc.embedPng(imageBytes);
 
-          const targetWidth = CONTENT_WIDTH - 20;
+          const targetWidth = CONTENT_WIDTH;
           let scaledHeight = (img.height / img.width) * targetWidth;
           const maxSliceHeight = A4_HEIGHT - 130;
           let drawWidth = targetWidth;
