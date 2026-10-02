@@ -38,6 +38,7 @@ loadEnv();
 const args = process.argv.slice(2);
 const isStatus = args.includes('--status') || args.length === 0;
 const isSyncDiagrams = args.includes('--sync-diagrams');
+const isUsage = args.includes('--usage') || args.includes('--quota');
 const listIdx = args.indexOf('--list');
 const listPrefix = listIdx >= 0 && args[listIdx + 1] ? args[listIdx + 1] : null;
 
@@ -71,6 +72,58 @@ async function main() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[X] BUCKET ERROR: ${msg}`);
+    }
+  }
+
+  if (isUsage) {
+    console.log('[+] Auditing Supabase Storage usage and Free Tier quota...');
+    try {
+      let totalFiles = 0;
+      let totalBytes = 0;
+      const folderBreakdown: Record<string, { files: number; bytes: number }> = {};
+
+      async function crawl(prefix: string) {
+        const items = await storage.list(prefix);
+        for (const item of items) {
+          if (item.name.endsWith('.pdf') || item.name.endsWith('.png') || item.name.endsWith('.jpg')) {
+            totalFiles++;
+            totalBytes += item.size;
+            const topLevel = item.path.split('/')[0] || 'root';
+            if (!folderBreakdown[topLevel]) {
+              folderBreakdown[topLevel] = { files: 0, bytes: 0 };
+            }
+            folderBreakdown[topLevel].files++;
+            folderBreakdown[topLevel].bytes += item.size;
+          } else {
+            // It's a directory / prefix
+            await crawl(item.path);
+          }
+        }
+      }
+
+      await crawl('');
+
+      const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+      const freeTierLimitMB = 1024; // 1 GB
+      const percentUsed = ((totalBytes / (1024 * 1024 * 1024)) * 100).toFixed(1);
+      const remainingMB = (freeTierLimitMB - Number(totalMB)).toFixed(2);
+
+      console.log('\n================================================================');
+      console.log('         SUPABASE STORAGE USAGE & FREE TIER QUOTA REPORT        ');
+      console.log('================================================================');
+      console.log(`Total Uploaded Objects: ${totalFiles}`);
+      console.log(`Total Storage Used:     ${totalMB} MB (${totalBytes} bytes)`);
+      console.log(`Free Tier Limit:        1,024.00 MB (1.00 GB)`);
+      console.log(`Quota Consumption:      ${percentUsed}%`);
+      console.log(`Remaining Free Space:   ${remainingMB} MB`);
+      console.log('----------------------------------------------------------------');
+      console.log('Top-Level Folder Breakdown:');
+      for (const [folder, data] of Object.entries(folderBreakdown)) {
+        console.log(`  - ${folder.padEnd(16)}: ${data.files.toString().padStart(5)} files | ${(data.bytes / (1024 * 1024)).toFixed(2)} MB`);
+      }
+      console.log('================================================================\n');
+    } catch (err: unknown) {
+      console.error('[X] Quota audit failed:', err instanceof Error ? err.message : err);
     }
   }
 

@@ -163,7 +163,8 @@ export async function compileWorksheetDocuments(
         answerContent: a.answerContent,
         markSchemeNotes: a.markSchemeNotes,
         marks: q.marks,
-        citation: a.provenance.citation,
+        citation: (q.provenance as any)?.display || a.provenance?.citation || q.provenance?.citation || '',
+        displayProvenance: (q.provenance as any)?.display || (a.provenance as any)?.display,
         diagramUrl: a.diagramUrl || `/answers/${q.id}.png`,
       };
     }),
