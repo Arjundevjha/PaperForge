@@ -81,16 +81,38 @@ def inspect_question(qid_query, store, as_json=False):
     for q in matches[:10]:  # Limit display to top 10 matches
         qid = q.get("id", "")
         meta = q.get("metadata", {}) if isinstance(q.get("metadata"), dict) else {}
-        school = q.get("school") or meta.get("school") or (qid.split('-')[0].upper() if '-' in qid else "Unknown")
-        year = q.get("year") or meta.get("year") or (qid.split('-')[1] if len(qid.split('-')) > 1 else "")
-        paper = q.get("paper") or meta.get("paper") or (qid.split('-')[2].replace('p', 'P') if len(qid.split('-')) > 2 else "")
-        qnum = q.get("questionNumber") or q.get("question_number") or meta.get("questionNumber")
+        prov = q.get("provenance", {}) if isinstance(q.get("provenance"), dict) else {}
+        school = prov.get("school") or q.get("school") or meta.get("school") or (qid.split('-')[0].upper() if '-' in qid else "Unknown")
+        year = prov.get("year") or q.get("year") or meta.get("year") or (qid.split('-')[1] if len(qid.split('-')) > 1 else "")
+        paper_type = prov.get("paperType") or "PRELIM"
+        paper_num = prov.get("paperNumber") or (2 if '-p2-' in qid else 1)
+        paper = "PROMO" if paper_type == "PROMO" else f"P{paper_num}"
+        display_prov = prov.get("display") or f"{school} {year} {paper_type} {paper}"
+        qnum = q.get("questionNumber") or q.get("question_number") or prov.get("questionNumber") or meta.get("questionNumber")
         topic = q.get("topic") or q.get("topicName") or meta.get("topic") or "General"
         marks = q.get("marks") or q.get("max_marks") or q.get("maxMarks") or 0
 
         composite_path = ANSWERS_DIR / f"{qid}.png"
         slices = get_answer_slices(qid)
         diagram_path = DIAGRAMS_DIR / f"{qid}.png"
+
+        source_id = q.get("sourceId") or q.get("source_id") or meta.get("sourceId")
+        source_paper = q.get("sourcePaper") or q.get("source_paper") or meta.get("sourcePaper")
+        if not source_paper and store and "sources" in store and source_id:
+            for s in store["sources"]:
+                if s.get("id") == source_id:
+                    source_paper = s.get("filename")
+                    break
+
+        # Check answers store
+        ans_text = q.get("answer") or q.get("answerContent") or q.get("answer_content") or ""
+        if not ans_text and store and "answers" in store:
+            for a in store["answers"]:
+                if a.get("questionId") == qid or a.get("question_id") == qid:
+                    ans_text = a.get("answerContent") or a.get("answer_content") or ""
+                    break
+
+        raw_q_text = q.get("textContent") or q.get("text_content") or q.get("text") or ""
 
         info = {
             "id": qid,
@@ -105,9 +127,11 @@ def inspect_question(qid_query, store, as_json=False):
             "answerSlicesCount": len(slices),
             "answerSliceFiles": [s.name for s in slices],
             "diagramFile": diagram_path.name if diagram_path.exists() else None,
-            "sourcePaper": q.get("sourcePaper") or q.get("source_paper") or meta.get("sourcePaper"),
-            "textSnippet": (q.get("text", "")[:120] + "...") if q.get("text") else "",
-            "answerSnippet": (q.get("answer", "")[:120] + "...") if q.get("answer") else "",
+            "sourcePaper": source_paper,
+            "sourceId": source_id,
+            "displayProvenance": display_prov,
+            "textSnippet": (raw_q_text[:120] + "...") if len(raw_q_text) > 120 else raw_q_text,
+            "answerSnippet": (ans_text[:120] + "...") if len(ans_text) > 120 else ans_text,
         }
         results.append(info)
 
@@ -118,7 +142,8 @@ def inspect_question(qid_query, store, as_json=False):
     print(f"\n[+] Found {len(matches)} question(s) matching '{qid_query}' (showing top {len(results)}):")
     for item in results:
         print(f"\n--- Question: {item['id']} ---")
-        print(f"  Source:       {item['school']} {item['year']} {item['paper']} Q{item['questionNumber']}")
+        print(f"  Provenance:   {item['displayProvenance']} (Q{item['questionNumber']})")
+        print(f"  Source File:  {item['sourcePaper']} (ID: {item['sourceId']})")
         print(f"  Topic:        {item['topic']} ({item['marks']} marks)")
         print(f"  Diagram:      {'✓ Present' if item['hasDiagramAsset'] else '✗ None'} ({item['diagramFile'] or 'none'})")
         print(f"  Answer Crops: {'✓ Present' if item['hasAnswerComposite'] else '✗ None'} ({item['answerSlicesCount']} slice(s): {', '.join(item['answerSliceFiles']) or 'none'})")
@@ -387,16 +412,168 @@ def system_health(as_json=False):
     return True
 
 
+def dump_paper(query, max_pages=5, start_page=1):
+    if not PAPERS_DIR.exists():
+        print(f"[ERROR] Papers directory not found at {PAPERS_DIR}", file=sys.stderr)
+        return False
+    matches = list(PAPERS_DIR.glob(f"*{query}*.pdf"))
+    if not matches:
+        print(f"[-] No PDF found matching query: {query}")
+        return False
+    target = matches[0]
+    print(f"\n=======================================================")
+    print(f"       DUMPING PAPER: {target.name}")
+    print(f"=======================================================")
+    import fitz
+    doc = fitz.open(target)
+    print(f"Total Pages: {len(doc)}")
+    p_start = max(0, start_page - 1)
+    p_end = min(len(doc), p_start + max_pages)
+    for p in range(p_start, p_end):
+        print(f"\n--- PAGE {p+1} ---")
+        print(doc[p].get_text("text").strip())
+    print("=======================================================\n")
+    return True
+
+
+def search_papers(query, max_results=10):
+    if not PAPERS_DIR.exists():
+        print(f"[ERROR] Papers directory not found at {PAPERS_DIR}", file=sys.stderr)
+        return False
+    print(f"\n[+] Searching 808 PDFs for: '{query}'...")
+    import fitz
+    matches = []
+    for pdf_path in sorted(PAPERS_DIR.glob("*.pdf")):
+        try:
+            doc = fitz.open(pdf_path)
+            for p_idx, page in enumerate(doc):
+                txt = page.get_text("text")
+                if query.lower() in txt.lower():
+                    # Extract surrounding snippet
+                    idx = txt.lower().find(query.lower())
+                    start = max(0, idx - 100)
+                    end = min(len(txt), idx + 200)
+                    snippet = txt[start:end].replace('\n', ' ')
+                    matches.append({
+                        "file": pdf_path.name,
+                        "page": p_idx + 1,
+                        "snippet": snippet
+                    })
+                    if len(matches) >= max_results:
+                        break
+        except Exception:
+            continue
+        if len(matches) >= max_results:
+            break
+
+    if not matches:
+        print(f"[-] No papers found containing text '{query}'")
+        return False
+
+    print(f"[✓] Found {len(matches)} match(es):")
+    for m in matches:
+        print(f"\n  File: {m['file']} (Page {m['page']})")
+        print(f"  Snippet: ...{m['snippet']}...")
+    print("=======================================================\n")
+    return True
+
+
+def inspect_sources(as_json=False):
+    store = load_store()
+    if not store or "sources" not in store:
+        print("[ERROR] Sources store unavailable.", file=sys.stderr)
+        return False
+    sources = store.get("sources", [])
+    print(f"\n=======================================================")
+    print(f"            BANKED SOURCES AUDIT ({len(sources)} sources)      ")
+    print(f"=======================================================")
+    for s in sources:
+        fn = s.get("filename", "")
+        sch = s.get("school", "")
+        yr = s.get("year", "")
+        ptype = s.get("paperType", "")
+        pnum = s.get("paperNumber", "")
+        sid = s.get("id", "")
+        print(f"ID: {sid.padEnd(40) if hasattr(sid, 'padEnd') else sid[:38]:<40} | {sch:<5} {yr} {ptype:<6} P{pnum} | File: {fn}")
+    print("=======================================================\n")
+    return True
+
+
+def inspect_worksheets(ws_id=None, as_json=False):
+    store = load_store()
+    if not store or "worksheets" not in store:
+        print("[ERROR] Worksheets store unavailable.", file=sys.stderr)
+        return False
+    worksheets = store.get("worksheets", [])
+    if ws_id:
+        worksheets = [w for w in worksheets if ws_id.lower() in w.get("id", "").lower() or ws_id.lower() in w.get("worksheetNumber", "").lower()]
+
+    print(f"\n=======================================================")
+    print(f"            CURATED WORKSHEETS AUDIT ({len(worksheets)} worksheets) ")
+    print(f"=======================================================")
+    q_map = {q["id"]: q for q in store.get("questions", [])}
+    s_map = {s["id"]: s for s in store.get("sources", [])}
+
+    for ws in worksheets:
+        wnum = ws.get("worksheetNumber", "")
+        title = ws.get("title", "")
+        qids = ws.get("manifest", {}).get("questions", [])
+        print(f"\nWorksheet: {wnum} ({ws.get('id')})")
+        print(f"Title:     {title}")
+        print(f"Questions: {len(qids)}")
+        for idx, qid in enumerate(qids, 1):
+            q = q_map.get(qid, {})
+            sid = q.get("sourceId", "")
+            src = s_map.get(sid, {})
+            slices = get_answer_slices(qid)
+            school = q.get("provenance", {}).get("school") or q.get("school") or (qid.split('-')[0].upper() if '-' in qid else "")
+            year = q.get("provenance", {}).get("year") or q.get("year") or ""
+            ptype = q.get("provenance", {}).get("paperType") or ""
+            pnum = q.get("provenance", {}).get("paperNumber") or ""
+            provenance = f"{school} {year} {ptype} P{pnum}".strip()
+            slice_status = f"✓ {len(slices)} slice(s)" if slices else "✗ 0 slices (TEXT FALLBACK)"
+            print(f"  {idx:2d}. [{qid}] {provenance:<24} | Slices: {slice_status:<16} | Source File: {src.get('filename', 'Unknown')}")
+    print("=======================================================\n")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="PaperForge Persistent Diagnostic & Health CLI")
     parser.add_argument("--health", action="store_true", help="Perform overall system health check (default)")
     parser.add_argument("--question", type=str, help="Inspect a specific question by ID, school, or keyword")
     parser.add_argument("--crops", action="store_true", help="Audit answer and diagram cropped PNG assets")
     parser.add_argument("--pairing", action="store_true", help="Inspect exam question paper and solution file pairing")
+    parser.add_argument("--sources", action="store_true", help="Inspect all banked exam sources in the store")
+    parser.add_argument("--worksheets", action="store_true", help="Inspect all curated worksheets")
+    parser.add_argument("--worksheet", type=str, help="Inspect a specific worksheet by ID or number")
     parser.add_argument("--pdf", type=str, help="Inspect compiled PDF metrics, images, and layout quality")
+    parser.add_argument("--dump-paper", type=str, help="Dump first few pages of an exam paper by filename")
+    parser.add_argument("--start-page", type=int, default=1, help="Start page for dump-paper")
+    parser.add_argument("--max-pages", type=int, default=5, help="Number of pages to dump")
+    parser.add_argument("--search-papers", type=str, help="Search inside all PDF papers for text snippet")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
 
     args = parser.parse_args()
+
+    if args.sources:
+        success = inspect_sources(as_json=args.json)
+        sys.exit(0 if success else 1)
+
+    if args.worksheets:
+        success = inspect_worksheets(as_json=args.json)
+        sys.exit(0 if success else 1)
+
+    if args.worksheet:
+        success = inspect_worksheets(ws_id=args.worksheet, as_json=args.json)
+        sys.exit(0 if success else 1)
+
+    if args.dump_paper:
+        success = dump_paper(args.dump_paper, max_pages=args.max_pages, start_page=args.start_page)
+        sys.exit(0 if success else 1)
+
+    if args.search_papers:
+        success = search_papers(args.search_papers)
+        sys.exit(0 if success else 1)
 
     if args.question:
         store = load_store()

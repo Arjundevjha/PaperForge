@@ -40,4 +40,15 @@ test('PaperForge Diagnostic Tooling (scripts/diagnose.py): Persistent Health & A
   const targetQ = questions.find((q) => q.id === 'rvhs-2019-p1-q03');
   assert.ok(targetQ, 'Question rvhs-2019-p1-q03 must exist');
   assert.strictEqual(targetQ.answerSlicesCount, 2, 'rvhs-2019-p1-q03 must have 2 solution slices');
+
+  // 4. Ground-Truth Healed Provenance Invariant (EJC Promo Q4)
+  const ejcRaw = execSync('python3 scripts/diagnose.py --question ejc-2023-p1-q04 --json', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  });
+  const ejcQuestions = JSON.parse(ejcRaw);
+  assert.ok(ejcQuestions.length > 0, 'Must find ejc-2023-p1-q04');
+  const ejcQ4 = ejcQuestions[0];
+  assert.strictEqual(ejcQ4.sourcePaper, 'EJC_H2_Promo_2023_(Qn)_15028.pdf', 'Must match authentic EJC Promo QP filename');
+  assert.ok(ejcQ4.displayProvenance.includes('Promo'), 'Provenance must cite Promo rather than Prelim');
 });
