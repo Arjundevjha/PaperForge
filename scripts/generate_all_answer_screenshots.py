@@ -188,6 +188,7 @@ def find_solution_markers(doc, start_p=0, end_p=None):
         end_p = len(doc)
 
     markers = {}
+    candidates = []
     for p_idx in range(start_p, end_p):
         page = doc[p_idx]
         blocks = page.get_text('dict').get('blocks', [])
@@ -197,32 +198,63 @@ def find_solution_markers(doc, start_p=0, end_p=None):
             for l in b['lines']:
                 y0, y1 = l['bbox'][1], l['bbox'][3]
                 x0, x1 = l['bbox'][0], l['bbox'][2]
-                if y0 < 35 or y0 > 720 or x0 > 145:
+                if y0 < 30 or y0 > 790 or x0 > 150:
                     continue
                 text = ''.join(s['text'] for s in l['spans']).strip()
                 if not text:
                     continue
-                if re.search(r'\b(?:page|\d+\s+of)\b', text, re.I):
+                if re.search(r'\b(?:page|\d+\s+of|turn\s+over|www\.)\b', text, re.I):
                     continue
 
-                m = re.match(r'^(?:(?:Question|Qn|Q|Soln|Solution(?:\s+for)?)\s*)?([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+[a-z\(\[]|\s*$)', text, re.I)
+                m_explicit = re.match(r'^(?:Question|Qn|Q|Soln|Solution(?:\s+for)?)\s*([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
+                m_bare = re.match(r'^([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text)
+
+                is_explicit = bool(m_explicit)
+                m = m_explicit or m_bare
                 if m:
                     qnum = int(m.group(1))
-                    if text.startswith('[') or 'mark' in text.lower():
+                    if text.startswith('[') or any(k in text.lower() for k in ['mark', 'ln', 'cos', 'sin', 'tan', 'sec']):
                         continue
-                    if qnum not in markers:
-                        markers[qnum] = []
-                    markers[qnum].append({'page': p_idx, 'y0': y0, 'y1': y1, 'x0': x0, 'text': text})
+                    candidates.append({
+                        'page': p_idx,
+                        'qnum': qnum,
+                        'y0': y0,
+                        'y1': y1,
+                        'x0': x0,
+                        'text': text,
+                        'explicit': is_explicit,
+                    })
+
+    if not candidates:
+        return {}
+
+    # Determine left margin for question column
+    explicit_x0s = [c['x0'] for c in candidates if c['explicit']]
+    min_x0 = min(c['x0'] for c in candidates)
+    target_margin_x0 = min(explicit_x0s) if explicit_x0s else min_x0
+
+    # Clean candidates: discard indented bare numbers (which are math steps, equations, vectors)
+    clean_candidates = []
+    for c in candidates:
+        if c['explicit']:
+            clean_candidates.append(c)
+        elif c['x0'] <= target_margin_x0 + 15:
+            clean_candidates.append(c)
+
+    markers_by_q = {}
+    for c in clean_candidates:
+        markers_by_q.setdefault(c['qnum'], []).append(c)
 
     # Monotonic resolution: ensure page(Q_N) >= page(Q_{N-1})
     resolved = {}
     last_page = start_p
     last_y = 0.0
     for q in range(1, 16):
-        cands = markers.get(q, [])
+        cands = markers_by_q.get(q, [])
         valid = [c for c in cands if c['page'] > last_page or (c['page'] == last_page and c['y0'] > last_y + 12)]
         if valid:
-            best = valid[0]
+            explicit_valid = [c for c in valid if c['explicit']]
+            best = explicit_valid[0] if explicit_valid else valid[0]
             resolved[q] = best
             last_page = best['page']
             last_y = best['y0']
@@ -268,21 +300,21 @@ def crop_solution_slices(doc, qnum, markers, max_p=None):
     if end_p - start_p > 2:
         end_p = start_p + 2
 
-    end_y = (next_m['y0'] - 4.0) if (next_m and next_m['page'] == end_p) else 720.0
+    end_y = (next_m['y0'] - 4.0) if (next_m and next_m['page'] == end_p) else 750.0
 
     slices = []
     for p in range(start_p, end_p + 1):
         page = doc[p]
         y0 = start_y if p == start_p else 35.0
-        y1 = end_y if p == end_p else 720.0
+        y1 = end_y if p == end_p else 750.0
 
         if y1 - y0 < 25:
             continue
 
-        rect = fitz.Rect(35, y0, 565, y1)
-        pix = page.get_pixmap(clip=rect, dpi=200)
-        img = Image.frombytes('RGB', [pix.width, pix.height], pix.samples)
-        trimmed = trim_whitespace(img)
+        rect = fitz.Rect(25, y0, 575, y1)
+        pix = page.get_pixmap(clip=rect, dpi=200, colorspace=fitz.csGRAY)
+        img = Image.frombytes('L', [pix.width, pix.height], pix.samples)
+        trimmed = trim_whitespace(img, padding=24)
         if trimmed and trimmed.width > 30 and trimmed.height > 30:
             slices.append(trimmed)
 
@@ -384,7 +416,7 @@ def main():
             else:
                 total_h = sum(s.height for s in slices) + (len(slices) - 1) * 15
                 max_w = max(s.width for s in slices)
-                combined = Image.new('RGB', (max_w, total_h), (255, 255, 255))
+                combined = Image.new('L', (max_w, total_h), 255)
                 curr_y = 0
                 for s in slices:
                     combined.paste(s, (0, curr_y))

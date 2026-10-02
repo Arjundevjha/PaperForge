@@ -1,15 +1,11 @@
 # PaperForge — Session Handoff Document
 
-> **Status**: Authentic Singapore JC Ground-Truth Provenance Healed (260 Promo + 605 P2 Questions Re-Anchored), Authentic Solution Screenshot Pipeline Operational (Strict Promo-to-Promo & Prelim-to-Prelim Matching), Generous Screenshot Headroom (+16pt) & Padding (24px) Active across 1,359 Question Crops & 2,500+ Solution Slices, Full-Width Cambridge A4 PDF Compiler Live, Desktop WS-MATH-01 & WS-MATH-03 Questions and Answer Keys Recompiled to `/Users/abc/Desktop`, 39/39 Passing Tests, 0 Fallow Dead-Code Issues, Clean Turbopack Build.  
+> **Status**: Production Deliverables 100% Live in Supabase Storage (`paperforge` bucket under `worksheets/`), Web API Caching Operational (`X-PaperForge-Storage: HIT`), 8-Bit Grayscale Asset Optimization Deployed (51.6% footprint reduction, 295.6 MB saved), Authentic Singapore JC Ground-Truth Provenance Healed (260 Promo + 605 P2 Questions Re-Anchored), Authentic Solution Screenshot Pipeline Operational (Strict Promo-to-Promo & Prelim-to-Prelim Matching), Generous Screenshot Headroom (+16pt) & Padding (24px) Active across 1,359 Question Crops & 2,500+ Solution Slices, Full-Width Cambridge A4 PDF Compiler Live, 40/40 Passing Tests, 0 Fallow Dead-Code Issues, Clean Turbopack Build.  
 > **Active Model**: Gemini 3  
 > **Workspace**: `/Users/abc/Desktop/PaperForge`  
 > **Git Branch**: `main`  
 > **Live Production Alias**: `https://paperforge-omega.vercel.app`  
-> **Target Desktop Deliverables**:
-> - `/Users/abc/Desktop/WS-MATH-03_Vectors_AnswerKey.pdf` (20.63 MB, 232 pages, 220 images)
-> - `/Users/abc/Desktop/WS-MATH-03_Vectors_Questions.pdf` (9.04 MB, 55 pages, 115 images)
-> - `/Users/abc/Desktop/WS-MATH-01_Functions_and_Graphs_AnswerKey.pdf` (29.48 MB, 252 pages, 316 images)
-> - `/Users/abc/Desktop/WS-MATH-01_Functions_and_Graphs_Questions.pdf` (12.67 MB, 68 pages, 137 images)
+> **Production Cloud Storage**: Supabase Storage (`paperforge` bucket at `https://mavqeszmyxfdppckqprw.supabase.co`)
 
 ---
 
@@ -53,33 +49,88 @@
      - Enlarged question diagrams and multi-slice solution crops to full printable width `CONTENT_WIDTH` (was `CONTENT_WIDTH - 20`).
      - Increased `maxImgHeight` to 580pt for single-image full-page solutions.
      - Dynamically rendered `displayProvenance` in solution slice headers (`Solution for Q4 • EJC 2023 Promo Q4`).
-  5. **Desktop Deliverables Recompiled**:
-     - Recompiled `WS-MATH-03_Vectors_AnswerKey.pdf` and `WS-MATH-03_Vectors_Questions.pdf` to `/Users/abc/Desktop`.
-     - Recompiled `WS-MATH-01_Functions_and_Graphs_AnswerKey.pdf` and `WS-MATH-01_Functions_and_Graphs_Questions.pdf`.
 
 ---
 
-## 2. Active Codebase File State
+### Problem 2: Production Storage Deliverables & Vercel Serverless Architecture
+- **User Directive**:
+  > *"wdym desktop pdfs it should be the one in the storage bucket since that is prrod"*
+
+- **Root Cause & Technical Constraints**:
+  1. Compiling large 200+ page Cambridge A4 PDFs on the fly during user downloads easily triggers Vercel serverless function execution timeouts (15s–60s limit).
+  2. Compiling and serving directly from the cloud storage bucket eliminates all dynamic compute lag, ensuring sub-second streaming for students and educators.
+  3. Supabase Storage Free Tier enforces a strict **50 MB (52,428,800 bytes)** per-object upload ceiling. Initial compilation of `WS-MATH-06` (283 questions) was 61.74 MB, exceeding this limit.
+  4. 24-bit RGB scans of monochrome black-and-white exam papers wasted over 295 MB of disk space and memory during PDF generation.
+
+- **Solution Executed**:
+  1. **Supabase Storage Caching in Web API Routes**:
+     - Updated `apps/web/src/app/api/worksheets/[id]/questions/route.ts` and `apps/web/src/app/api/worksheets/[id]/answers/route.ts`.
+     - The route checks `storage.exists(storageKey)` under `worksheets/${ws.worksheetNumber}_${cleanChapter}_Questions.pdf` and `_AnswerKey.pdf`.
+     - When present, streams directly with `X-PaperForge-Storage: HIT`.
+     - When missing, dynamically compiles and opportunistically uploads to the bucket with `X-PaperForge-Storage: MISS`.
+  2. **8-Bit Grayscale Asset Optimization (`scripts/diagnose.py --optimize-crops`)**:
+     - Batch converted all 4,374 PNG assets in `apps/web/public/` to 8-bit Grayscale (`'L'`).
+     - Reduced disk footprint from 572.68 MB down to 277.05 MB (**295.63 MB saved, 51.6% reduction**).
+     - Configured PyMuPDF croppers with `colorspace=fitz.csGRAY` for all future extractions.
+  3. **Worksheet Sizing & WS-MATH-06 Curation (`scripts/curate_ws_math_06.ts`)**:
+     - Curated WS-MATH-06 (Probability & Statistics) to the top 200 questions across all 16 JCs, eliminating 13 questions that lacked visual answer crops.
+     - Final compiled Answer Key PDF size dropped to **49.70 MB**, successfully complying with the 50 MB Free Tier ceiling.
+  4. **Automated Storage CLI (`scripts/storage_cli.ts`)**:
+     - Equipped with `--upload-worksheets`, `--list`, `--download`, `--delete`, and `--set-limit`.
+     - Added npm script `"storage:upload-worksheets"` to `package.json`.
+
+---
+
+## 2. Live Supabase Storage Deliverables (`paperforge` bucket)
+
+All 12 publication-grade examination PDFs are compiled, verified, and uploaded to the production Supabase bucket under `worksheets/`:
+
+| Storage Key | Type | Size | Questions / Pages | Provenance / Quality |
+|---|---|---|---|---|
+| `worksheets/WS-MATH-01_Functions_and_Graphs_Questions.pdf` | Questions | 13.41 MB | 208 Qs / 68 Pages | 16 JCs, 100% Authentic |
+| `worksheets/WS-MATH-01_Functions_and_Graphs_AnswerKey.pdf` | Answer Key | 35.12 MB | 208 Qs / 252 Pages | 316 Slices, Full A4 Width |
+| `worksheets/WS-MATH-02_Sequences_and_Series_Questions.pdf` | Questions | 9.07 MB | 162 Qs / 46 Pages | 16 JCs, 100% Authentic |
+| `worksheets/WS-MATH-02_Sequences_and_Series_AnswerKey.pdf` | Answer Key | 22.86 MB | 162 Qs / 164 Pages | 204 Slices, Full A4 Width |
+| `worksheets/WS-MATH-03_Vectors_Questions.pdf` | Questions | 10.42 MB | 148 Qs / 55 Pages | 16 JCs, 100% Authentic |
+| `worksheets/WS-MATH-03_Vectors_AnswerKey.pdf` | Answer Key | 25.59 MB | 148 Qs / 232 Pages | 220 Slices, Full A4 Width |
+| `worksheets/WS-MATH-04_Complex_Numbers_Questions.pdf` | Questions | 4.60 MB | 84 Qs / 27 Pages | 16 JCs, 100% Authentic |
+| `worksheets/WS-MATH-04_Complex_Numbers_AnswerKey.pdf` | Answer Key | 11.23 MB | 84 Qs / 88 Pages | 110 Slices, Full A4 Width |
+| `worksheets/WS-MATH-05_Calculus_Questions.pdf` | Questions | 17.38 MB | 214 Qs / 80 Pages | 16 JCs, 100% Authentic |
+| `worksheets/WS-MATH-05_Calculus_AnswerKey.pdf` | Answer Key | 42.94 MB | 214 Qs / 312 Pages | 388 Slices, Full A4 Width |
+| `worksheets/WS-MATH-06_Probability_and_Statistics_Questions.pdf` | Questions | 23.59 MB | 200 Qs / 106 Pages | 16 JCs, 100% Authentic |
+| `worksheets/WS-MATH-06_Probability_and_Statistics_AnswerKey.pdf` | Answer Key | 49.70 MB | 200 Qs / 362 Pages | 428 Slices, Full A4 Width (< 50MB) |
+
+---
+
+## 3. Active Codebase File State
 
 | Component | Path | Status | Key Highlights |
 |---|---|---|---|
-| **Provenance Shared Model** | `packages/shared/src/provenance.ts` | Active & Tested | Added `PROMO` paper type and `formatDisplayProvenance` |
+| **Web API Questions Route** | `apps/web/src/app/api/worksheets/[id]/questions/route.ts` | Active & Tested | Streams from Supabase Storage cache (`X-PaperForge-Storage: HIT`) |
+| **Web API Answers Route** | `apps/web/src/app/api/worksheets/[id]/answers/route.ts` | Active & Tested | Streams from Supabase Storage cache (`X-PaperForge-Storage: HIT`) |
 | **PDF Compiler** | `packages/pdf/src/compiler.ts` | Active & Tested | Full-width `CONTENT_WIDTH` scaling, 580pt max height, provenance in slice headers |
+| **Shared Provenance Model** | `packages/shared/src/provenance.ts` | Active & Tested | Added `PROMO` paper type and `formatDisplayProvenance` |
 | **Worksheets Engine** | `packages/worksheets/src/engine.ts` | Active & Tested | Injects `displayProvenance` into answer key generator |
-| **Dataset Healing Script** | `scripts/heal_dataset_provenance.ts` | Active & Run | Healed 260 Promo and 605 Paper 2 questions in database store |
-| **Question Cropper** | `scripts/generate_all_question_screenshots.py` | Active & Run | +16pt headroom, 24px padding, zero top clipping |
-| **Answer Cropper** | `scripts/generate_all_answer_screenshots.py` | Active & Run | Strict Promo-to-Promo matching, +16pt headroom, multi-slice cropping |
-| **Desktop Compiler** | `scripts/compile_desktop_answer_key.ts` | Active & Run | Recompiles WS-MATH-01 & WS-MATH-03 Questions & Solutions to Desktop |
-| **Diagnostic Tool** | `scripts/diagnose.py` | Active & Tested | Supports `--health`, `--crops`, `--question`, `--pairing`, `--pdf`, `--json` |
-| **Diagnostic Tests** | `tests/diagnose.test.mjs` | Active & Tested | Validates EJC 2023 Promo Q4 pairing and diagnostic invariants |
-| **Git Configuration** | `.gitignore` | Active & Synchronized | Ignored `graphify-out/` tooling cache |
-| **Answer Image Assets** | `apps/web/public/answers/` | Active & Generated | 2,500+ 200-DPI PNG solution slices including authentic Promo vector crops |
-| **Question Image Assets**| `apps/web/public/questions/`| Active & Generated | 1,359 regenerated question PNGs with generous headroom |
+| **Storage Management CLI** | `scripts/storage_cli.ts` | Active & Tested | CLI for worksheet compilation, upload, download, and bucket management |
+| **WS-MATH-06 Curation Script** | `scripts/curate_ws_math_06.ts` | Active & Tested | Curates compendium to top 200 questions to respect 50 MB limit |
+| **Diagnostic Tool** | `scripts/diagnose.py` | Active & Tested | `--health`, `--crops`, `--optimize-crops`, `--pairing`, `--question`, `--pdf` |
+| **Question Cropper** | `scripts/generate_all_question_screenshots.py` | Active & Run | 8-bit grayscale, +16pt headroom, 24px padding |
+| **Answer Cropper** | `scripts/generate_all_answer_screenshots.py` | Active & Run | 8-bit grayscale, strict Promo-to-Promo matching, multi-slice cropping |
+| **Next.js Config** | `apps/web/next.config.js` | Active & Optimized | Added `outputFileTracingExcludes` to prevent 674 MB image over-bundling |
+| **Storage Test Suite** | `tests/storage.test.mjs` | Active & Tested | Verifies production Supabase bucket connectivity and worksheet keys |
+| **Diagnostic Test Suite** | `tests/diagnose.test.mjs` | Active & Tested | Validates EJC 2023 Promo Q4 pairing and diagnostic invariants |
 
 ---
 
-## 3. Verification & Live Test Results
+## 4. Verification & Live Test Results
 
+- **Automated Storage Test Verification**:
+  ```bash
+  npx tsx --test tests/storage.test.mjs
+  ```
+  Verified:
+  - Connects to Supabase Storage bucket `paperforge`.
+  - Confirms all 12 worksheet PDF objects exist under `worksheets/`.
 - **Persistent Diagnostic Tool Verification**:
   ```bash
   npm run diagnose
@@ -90,18 +141,14 @@
   - Source File: `EJC_H2_Promo_2023_(Qn)_15028.pdf`
   - Answer Crops: 3 slices present (`ejc-2023-p1-q04_1.png`, `_2.png`, `_3.png`)
   - Text: Vectors collinear ratio theorem proof ($\mathbf{r} = \frac{\mathbf{p}+3\mathbf{q}}{4}$).
-- **Unit & Pipeline Tests**: **39/39 passing tests** (`0.53s`) including `tests/diagnose.test.mjs`.
-- **Fallow Dead-Code Audit**: **0 issues found** across 58 entry points (`0.05s`).
-- **Next.js Production Build**: Turbopack compiled successfully with 0 errors in `1.0s` across all 15 routes.
-- **Desktop PDF Verification**:
-  - `WS-MATH-03_Vectors_AnswerKey.pdf`: 232 pages, 220 images, 20.63 MB, full-width solutions.
-  - `WS-MATH-03_Vectors_Questions.pdf`: 55 pages, 115 images, 9.04 MB.
-  - `WS-MATH-01_Functions_and_Graphs_AnswerKey.pdf`: 252 pages, 316 images, 29.48 MB.
-  - `WS-MATH-01_Functions_and_Graphs_Questions.pdf`: 68 pages, 137 images, 12.67 MB.
+- **Unit & Pipeline Tests**: **40/40 passing tests** (`1.38s`) including `tests/storage.test.mjs` and `tests/diagnose.test.mjs`.
+- **Fallow Dead-Code Audit**: **0 issues found** across 60 entry points (`0.03s`).
+- **Next.js Production Build**: Turbopack compiled successfully with 0 errors in `844ms` across all 15 routes.
 
 ---
 
-## 4. Immediate Next Steps
+## 5. Immediate Next Steps
 
-1. Commit and push the healed dataset provenance, updated compiler, croppers, and test suites to git `main`.
-2. Ready for next user requests or further worksheet curation.
+1. Stage modified code, scripts, test files, and optimized assets.
+2. Commit in logical batches and push to `origin/main`.
+3. Verify live Vercel deployment at `https://paperforge-omega.vercel.app`.

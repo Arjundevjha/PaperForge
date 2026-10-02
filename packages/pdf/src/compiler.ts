@@ -46,17 +46,22 @@ export interface AnswerKeyOptions {
 function resolveDiagramPath(diagramUrl?: string): string | null {
   if (!diagramUrl) return null;
   const cleanPath = diagramUrl.replace(/^\//, '');
+  const cwd = process.cwd();
   const candidates = [
     diagramUrl,
-    path.resolve(process.cwd(), 'apps/web/public', cleanPath),
-    path.resolve(process.cwd(), 'public', cleanPath),
-    path.resolve(__dirname, '../../../apps/web/public', cleanPath),
-    path.resolve(__dirname, '../../apps/web/public', cleanPath),
-    path.resolve(__dirname, '../public', cleanPath),
+    [cwd, 'apps', 'web', 'public', cleanPath].join(path.sep),
+    [cwd, 'public', cleanPath].join(path.sep),
+    [__dirname, '..', '..', '..', 'apps', 'web', 'public', cleanPath].join(path.sep),
+    [__dirname, '..', '..', 'apps', 'web', 'public', cleanPath].join(path.sep),
+    [__dirname, '..', 'public', cleanPath].join(path.sep),
   ];
   for (const c of candidates) {
-    if (fs.existsSync(/*turbopackIgnore: true*/ c)) {
-      return c;
+    try {
+      if (typeof fs.existsSync === 'function' && fs.existsSync(c)) {
+        return c;
+      }
+    } catch {
+      // ignore
     }
   }
   return null;
@@ -67,7 +72,9 @@ function resolveAnswerSlices(questionId?: string, diagramUrl?: string): string[]
   if (questionId) {
     let sIdx = 1;
     while (sIdx <= 8) {
-      const cand = resolveDiagramPath(`/answers/${questionId}_${sIdx}.png`);
+      const candJpg = resolveDiagramPath(`/answers/${questionId}_${sIdx}.jpg`);
+      const candPng = resolveDiagramPath(`/answers/${questionId}_${sIdx}.png`);
+      const cand = candJpg || candPng;
       if (cand) {
         slices.push(cand);
         sIdx++;
@@ -77,7 +84,9 @@ function resolveAnswerSlices(questionId?: string, diagramUrl?: string): string[]
     }
     if (slices.length > 0) return slices;
 
-    const mainCand = resolveDiagramPath(`/answers/${questionId}.png`);
+    const mainJpg = resolveDiagramPath(`/answers/${questionId}.jpg`);
+    const mainPng = resolveDiagramPath(`/answers/${questionId}.png`);
+    const mainCand = mainJpg || mainPng;
     if (mainCand) return [mainCand];
   }
 
@@ -301,7 +310,8 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
     if (diagramFilePath) {
       try {
         const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ diagramFilePath);
-        const img = await doc.embedPng(imageBytes);
+        const isJpg = diagramFilePath.endsWith('.jpg') || diagramFilePath.endsWith('.jpeg');
+        const img = isJpg ? await doc.embedJpg(imageBytes) : await doc.embedPng(imageBytes);
         const maxImgWidth = CONTENT_WIDTH;
         const maxImgHeight = 580;
         const dims = img.scaleToFit(maxImgWidth, maxImgHeight);
@@ -426,7 +436,7 @@ export async function generateQuestionPaperPdf(options: ExamPaperOptions): Promi
     color: rgb(0.3, 0.3, 0.3),
   });
 
-  return await doc.save();
+  return await doc.save({ useObjectStreams: true });
 }
 
 export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<Uint8Array> {
@@ -537,7 +547,8 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
       try {
         for (const slicePath of slicePaths) {
           const imageBytes = fs.readFileSync(/*turbopackIgnore: true*/ slicePath);
-          const img = await doc.embedPng(imageBytes);
+          const isJpg = slicePath.endsWith('.jpg') || slicePath.endsWith('.jpeg');
+          const img = isJpg ? await doc.embedJpg(imageBytes) : await doc.embedPng(imageBytes);
 
           const targetWidth = CONTENT_WIDTH;
           let scaledHeight = (img.height / img.width) * targetWidth;
@@ -671,5 +682,5 @@ export async function generateAnswerKeyPdf(options: AnswerKeyOptions): Promise<U
     y -= 16;
   }
 
-  return await doc.save();
+  return await doc.save({ useObjectStreams: true });
 }

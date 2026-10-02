@@ -60,11 +60,7 @@ def find_markers_sequential(doc):
         if 'INSTRUCTIONS' in txt0 or 'CANDIDATE' in txt0 or 'INDEX NO' in txt0:
             start_p = 1
 
-    expected_q = 1
-    markers = {}
-    last_page = start_p
-    last_y = 0.0
-
+    raw_candidates = []
     for p_idx in range(start_p, len(doc)):
         page = doc[p_idx]
         pdict = page.get_text('dict')
@@ -75,7 +71,7 @@ def find_markers_sequential(doc):
             for l in b['lines']:
                 y0, y1 = l['bbox'][1], l['bbox'][3]
                 x0, x1 = l['bbox'][0], l['bbox'][2]
-                if y0 < 25 or y1 > 790:
+                if y0 < 25 or y1 > 790 or x0 > 150:
                     continue
 
                 line_text = ''.join(s['text'] for s in l['spans']).strip()
@@ -83,31 +79,67 @@ def find_markers_sequential(doc):
                     continue
 
                 if re.match(r'^\s*Answers\s*$', line_text, re.IGNORECASE):
-                    return markers
+                    break
 
-                pat = r'^(?:Question\s+|Q\s*)?' + str(expected_q) + r'([\.\:\s\(\[].*|$)'
-                m = re.match(pat, line_text, re.IGNORECASE)
-                if m and x0 < 115:
-                    rest = m.group(1).strip()
+                m_explicit = re.match(r'^(?:Question\s+|Q\s*)([1-9]|1[0-5])([\.\:\s\(\[].*|$)', line_text, re.IGNORECASE)
+                m_bare = re.match(r'^([1-9]|1[0-5])([\.\:\s\(\[].*|$)', line_text)
+                is_explicit = bool(m_explicit)
+                m = m_explicit or m_bare
+
+                if m:
+                    qnum = int(m.group(1))
+                    rest = m.group(2).strip()
                     first_tok = rest.split()[0] if rest else ''
                     if first_tok in INVALID_FOLLOWERS or first_tok.startswith(('+', '-', '=', '<', '>', '≤', '≥')):
                         continue
                     if line_text.startswith('[') or re.match(r'^\[\d+\]$', line_text):
                         continue
+                    if any(k in line_text.lower() for k in ['mark', 'ln', 'cos', 'sin', 'tan', 'sec']):
+                        continue
 
-                    if p_idx > last_page or (p_idx == last_page and y0 > last_y + 12):
-                        markers[expected_q] = {
-                            'qnum': expected_q,
-                            'page': p_idx,
-                            'y0': y0,
-                            'y1': y1,
-                            'x0': x0,
-                            'x1': x1,
-                            'line': line_text[:40]
-                        }
-                        last_page = p_idx
-                        last_y = y0
-                        expected_q += 1
+                    raw_candidates.append({
+                        'qnum': qnum,
+                        'page': p_idx,
+                        'y0': y0,
+                        'y1': y1,
+                        'x0': x0,
+                        'x1': x1,
+                        'line': line_text[:40],
+                        'explicit': is_explicit
+                    })
+
+    if not raw_candidates:
+        return {}
+
+    # Target left margin calculation
+    explicit_x0s = [c['x0'] for c in raw_candidates if c['explicit']]
+    min_x0 = min(c['x0'] for c in raw_candidates)
+    target_margin_x0 = min(explicit_x0s) if explicit_x0s else min_x0
+
+    # Clean candidates: discard indented numbers (e.g. math expressions, sub-equations)
+    clean_candidates = []
+    for c in raw_candidates:
+        if c['explicit']:
+            clean_candidates.append(c)
+        elif c['x0'] <= target_margin_x0 + 15:
+            clean_candidates.append(c)
+
+    cands_by_q = {}
+    for c in clean_candidates:
+        cands_by_q.setdefault(c['qnum'], []).append(c)
+
+    markers = {}
+    last_page = start_p
+    last_y = 0.0
+    for q in range(1, 16):
+        cands = cands_by_q.get(q, [])
+        valid = [c for c in cands if c['page'] > last_page or (c['page'] == last_page and c['y0'] > last_y + 12)]
+        if valid:
+            explicit_valid = [c for c in valid if c['explicit']]
+            best = explicit_valid[0] if explicit_valid else valid[0]
+            markers[q] = best
+            last_page = best['page']
+            last_y = best['y0']
 
     return markers
 
@@ -121,12 +153,30 @@ def crop_question(doc, qnum, markers, sorted_qnums):
 
     m = markers[qnum]
     p_idx = m['page']
-    start_y = max(20.0, m['y0'] - 16.0)
+    page = doc[p_idx]
+
+    # Bound start_y by preceding question on the same page
+    q_idx = sorted_qnums.index(qnum) if qnum in sorted_qnums else -1
+    if q_idx > 0:
+        prev_m = markers[sorted_qnums[q_idx - 1]]
+        if prev_m['page'] == p_idx:
+            prev_blocks = [
+                b for b in page.get_text('blocks')
+                if b[1] >= prev_m['y0'] and b[3] <= m['y0'] and b[4].strip()
+            ]
+            prev_bottom = max((b[3] for b in prev_blocks), default=prev_m['y0'])
+            start_y = max(prev_bottom + 3.0, m['y0'] - 16.0)
+        else:
+            start_y = max(20.0, m['y0'] - 16.0)
+    else:
+        start_y = max(20.0, m['y0'] - 16.0)
 
     # Determine end_y
-    next_idx = sorted_qnums.index(qnum) + 1 if qnum in sorted_qnums else -1
+    next_idx = q_idx + 1 if q_idx >= 0 and q_idx + 1 < len(sorted_qnums) else -1
     has_next_same_page = False
     next_m = None
+
+    footer_pat = re.compile(r'©|Turn\s+over|Prelim|\bpage\b|^\s*\d+\s*$|Section\s+[AB]\b|End\s+of\s+(?:Paper|Section)', re.I)
 
     if next_idx > 0 and next_idx < len(sorted_qnums):
         next_m = markers[sorted_qnums[next_idx]]
@@ -134,9 +184,7 @@ def crop_question(doc, qnum, markers, sorted_qnums):
             has_next_same_page = True
             end_y = min(775.0, next_m['y0'] - 14.0)
         else:
-            # Question runs to end of current page before footer
-            page = doc[p_idx]
-            footer_pat = re.compile(r'©|Turn\s+over|Prelim|\bpage\b|^\s*\d+\s*$', re.I)
+            # Question runs to end of current page before footer / section boundary
             blocks = [
                 b for b in page.get_text('blocks')
                 if b[1] >= m['y0'] and b[3] <= 750 and b[4].strip() and not footer_pat.search(b[4].strip())
@@ -145,8 +193,6 @@ def crop_question(doc, qnum, markers, sorted_qnums):
             end_y = min(760.0, last_y1 + 4.0)
     else:
         # Last question
-        page = doc[p_idx]
-        footer_pat = re.compile(r'©|Turn\s+over|Prelim|\bpage\b|^\s*\d+\s*$', re.I)
         blocks = [
             b for b in page.get_text('blocks')
             if b[1] >= m['y0'] and b[3] <= 750 and b[4].strip() and not footer_pat.search(b[4].strip())
@@ -157,26 +203,33 @@ def crop_question(doc, qnum, markers, sorted_qnums):
     if end_y - start_y < 40:
         end_y = min(760.0, start_y + 140)
 
-    page = doc[p_idx]
-    rect = fitz.Rect(45, start_y, 560, end_y)
-    pix1 = page.get_pixmap(clip=rect, dpi=200)
-    img1 = Image.frombytes("RGB", [pix1.width, pix1.height], pix1.samples)
+    rect = fitz.Rect(35, start_y, 570, end_y)
+    pix1 = page.get_pixmap(clip=rect, dpi=200, colorspace=fitz.csGRAY)
+    img1 = Image.frombytes("L", [pix1.width, pix1.height], pix1.samples)
     text1 = page.get_text('text', clip=rect)
 
-    # If the question continues onto the next page before the next question starts
-    if not has_next_same_page and next_m is not None and next_m['page'] == p_idx + 1 and next_m['y0'] > 90:
+    # Check cross-page continuation onto next page
+    if not has_next_same_page and p_idx + 1 < len(doc):
         page2 = doc[p_idx + 1]
-        rect2 = fitz.Rect(45, 25.0, 560, min(772.0, next_m['y0'] - 4.0))
-        pix2 = page2.get_pixmap(clip=rect2, dpi=200)
-        img2 = Image.frombytes("RGB", [pix2.width, pix2.height], pix2.samples)
-        text2 = page2.get_text('text', clip=rect2)
+        p2_end_y = (next_m['y0'] - 12.0) if (next_m and next_m['page'] == p_idx + 1) else 750.0
 
-        combined = Image.new("RGB", (max(img1.width, img2.width), img1.height + img2.height + 10), (255, 255, 255))
-        combined.paste(img1, (0, 0))
-        combined.paste(img2, (0, img1.height + 10))
-        return trim_whitespace(combined), (text1 + '\n' + text2).strip()
+        p2_blocks = [
+            b for b in page2.get_text('blocks')
+            if b[1] >= 25.0 and b[3] <= p2_end_y and b[4].strip() and not footer_pat.search(b[4].strip())
+        ]
+        if p2_blocks and (max(b[3] for b in p2_blocks) - min(b[1] for b in p2_blocks)) > 20:
+            last_p2_y1 = max(b[3] for b in p2_blocks)
+            rect2 = fitz.Rect(35, 25.0, 570, min(760.0, last_p2_y1 + 6.0))
+            pix2 = page2.get_pixmap(clip=rect2, dpi=200, colorspace=fitz.csGRAY)
+            img2 = Image.frombytes("L", [pix2.width, pix2.height], pix2.samples)
+            text2 = page2.get_text('text', clip=rect2)
 
-    return trim_whitespace(img1), text1.strip()
+            combined = Image.new("L", (max(img1.width, img2.width), img1.height + img2.height + 10), 255)
+            combined.paste(img1, (0, 0))
+            combined.paste(img2, (0, img1.height + 10))
+            return trim_whitespace(combined, padding=24), (text1 + '\n' + text2).strip()
+
+    return trim_whitespace(img1, padding=24), text1.strip()
 
 def main():
     print('================================================================')
