@@ -4,6 +4,18 @@ const path = require('path');
 const nextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: path.join(__dirname, '../../'),
+  outputFileTracingExcludes: {
+    '*': [
+      './papers/**',
+      './paperforge_project_docs/**',
+      './storage/**',
+      './apps/web/public/answers/**',
+      './apps/web/public/questions/**',
+      './public/answers/**',
+      './public/questions/**',
+      './**/*.pdf',
+    ],
+  },
   transpilePackages: [
     '@paperforge/shared',
     '@paperforge/questions',
