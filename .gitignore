@@ -53,6 +53,7 @@ Thumbs.db
 
 # Tooling caches & storage
 .fallow/
+graphify-out/
 .paperforge-store.json
 **/.paperforge-store.json
 
