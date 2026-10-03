@@ -73,3 +73,9 @@ generated_worksheets/
 __pycache__/
 *.pyc
 **/__pycache__/
+
+# Static screenshot crops
+apps/web/public/answers/
+apps/web/public/questions/
+public/answers/
+public/questions/
