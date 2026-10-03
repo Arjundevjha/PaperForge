@@ -30,6 +30,7 @@ import {
 import MathRenderer from '../ui/MathRenderer';
 import { sanitizeMathQuestionText } from '../../lib/sanitize-question';
 import { ReclassifyModal } from '../questions/ReclassifyModal';
+import { getQuestionImageUrl, getAnswerImageUrl } from '../../lib/storage-url';
 
 
 export interface TeacherResourceHubProps {
@@ -484,7 +485,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                         {/* Authentic High-Resolution Question Screenshot */}
                         <div className="my-2.5 flex justify-center bg-white rounded">
                           <img
-                            src={`/questions/${q.id}.png`}
+                            src={getQuestionImageUrl(q.id)}
                             alt={`Question ${idx + 1}`}
                             className="max-w-full h-auto object-contain rounded border border-slate-200/80 shadow-xs"
                             loading="lazy"
@@ -512,7 +513,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                             {/* Authentic High-Resolution Answer Screenshot */}
                             <div className="my-2 flex justify-center bg-white rounded">
                               <img
-                                src={ans.diagramUrl || `/answers/${q.id}.png`}
+                                src={getAnswerImageUrl(q.id, ans.diagramUrl)}
                                 alt={`Solution for Question ${idx + 1}`}
                                 className="max-w-full h-auto object-contain rounded border border-green-300 shadow-xs"
                                 loading="lazy"

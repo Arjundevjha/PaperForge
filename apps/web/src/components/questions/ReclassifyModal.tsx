@@ -15,6 +15,7 @@ import {
   SINGAPORE_A_LEVEL_SYLLABI,
   SubjectId,
 } from '@paperforge/shared';
+import { getQuestionImageUrl } from '../../lib/storage-url';
 
 export interface ReclassifyModalProps {
   isOpen: boolean;
@@ -203,7 +204,7 @@ export const ReclassifyModal: React.FC<ReclassifyModalProps> = ({
           <div className="max-h-40 overflow-y-auto rounded bg-white p-2 border border-slate-300 flex justify-center items-center">
             {!imageError ? (
               <img
-                src={question.diagramUrl || `/questions/${question.id}.png`}
+                src={question.diagramUrl || getQuestionImageUrl(question.id)}
                 alt={`Question ${question.questionNumber}`}
                 className="max-w-full h-auto object-contain max-h-36"
                 onError={() => setImageError(true)}
