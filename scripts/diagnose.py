@@ -620,7 +620,7 @@ def inspect_paper_markers(query):
                 if not text or x0 > 150:
                     continue
                 # Match explicit prefix or bare number
-                m_explicit = re.match(r'^(?:Question|Qn|Q|Soln|Solution(?:\s+for)?)\s*([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
+                m_explicit = re.match(r'^(?:Suggested\s+)?(?:Question|Qn|Q|Soln|Solution|Answer|Marking\s+Scheme)(?:\s+(?:to|for))?\s*(?:Question|Qn|Q)?\s*([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
                 m_bare = re.match(r'^([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text)
                 
                 is_explicit = bool(m_explicit)
@@ -786,10 +786,92 @@ def inspect_worksheets(ws_id=None, as_json=False):
     return True
 
 
+def diagnose_answer_crop(qid, as_json=False):
+    store = load_store()
+    if not store:
+        print("[ERROR] Question store unavailable.", file=sys.stderr)
+        return False
+    questions = {q['id']: q for q in store.get('questions', [])}
+    sources = {s['id']: s for s in store.get('sources', [])}
+    answers = {a.get('questionId'): a for a in store.get('answers', [])}
+
+    q = questions.get(qid)
+    if not q:
+        print(f"[-] Question '{qid}' not found in store.")
+        return False
+
+    sid = q.get('sourceId')
+    src = sources.get(sid)
+    qp_fn = src.get('filename') if src else None
+    prov = q.get('provenance', {})
+    is_promo = prov.get('paperType') == 'PROMO' or (qp_fn and 'promo' in qp_fn.lower()) or 'promo' in qid.lower()
+    paper_num = None if is_promo else prov.get('paperNumber')
+    if not paper_num and not is_promo:
+        m_p = re.search(r'-p([12])-q', qid)
+        paper_num = int(m_p.group(1)) if m_p else 1
+
+    # Import cropper resolution logic
+    import generate_all_answer_screenshots as gen
+
+    print(f"\n=======================================================")
+    print(f"       DIAGNOSING ANSWER CROP FOR: {qid}")
+    print(f"=======================================================")
+    print(f"Provenance:     {prov.get('display', 'Unknown')}")
+    print(f"Is Promo:       {is_promo}")
+    print(f"Paper Number:   {paper_num}")
+    print(f"Question Paper: {qp_fn}")
+
+    sol_fn = gen.resolve_solution_file(qp_fn, paper_num)
+    print(f"Resolved Sol:   {sol_fn}")
+
+    if not sol_fn:
+        print("[!] Failed to resolve solution file!")
+        return False
+
+    sol_path = PAPERS_DIR / sol_fn
+    if not sol_path.exists():
+        print(f"[!] Solution file does not exist on disk: {sol_path}")
+        return False
+
+    doc = fitz.open(str(sol_path))
+    print(f"Doc Pages:      {len(doc)}")
+    start_p, end_p = gen.find_solution_section_range(doc, paper_num)
+    print(f"Section Range:  pages {start_p+1} to {end_p} (0-idx: {start_p} to {end_p})")
+
+    markers = gen.find_solution_markers(doc, start_p, end_p)
+    print(f"Found Markers:  {sorted(markers.keys())}")
+    for k in sorted(markers.keys()):
+        m = markers[k]
+        print(f"  Q{k:02d} -> Page {m['page']+1} (0-idx: {m['page']}) at y0={m['y0']:.1f}, x0={m['x0']:.1f} | text='{m['text']}'")
+
+    qn_str = str(q.get('questionNumber', '1'))
+    qn = int(qn_str) if qn_str.isdigit() else 1
+    print(f"Target Qnum:    {qn}")
+    if qn not in markers:
+        print(f"[!] Target Q{qn} NOT in markers!")
+        return False
+
+    slices = gen.crop_solution_slices(doc, qn, markers, end_p)
+    print(f"Produced:       {len(slices)} slice(s)")
+    for s_idx, s in enumerate(slices, 1):
+        print(f"  Slice {s_idx}: size {s.width}x{s.height}, mode {s.mode}")
+
+    ans = answers.get(qid)
+    if ans:
+        print(f"DB Answer ID:   {ans.get('id')}")
+        print(f"DB diagramUrl:  {ans.get('diagramUrl')}")
+        ans_txt = ans.get('answerContent', '')
+        print(f"DB ans text:    {(ans_txt[:150] + '...') if len(ans_txt) > 150 else ans_txt}")
+
+    print("=======================================================\n")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="PaperForge Persistent Diagnostic & Health CLI")
     parser.add_argument("--health", action="store_true", help="Perform overall system health check (default)")
     parser.add_argument("--question", type=str, help="Inspect a specific question by ID, school, or keyword")
+    parser.add_argument("--diagnose-answer", type=str, help="Deep dive into answer pairing, markers, and crop generation for a question")
     parser.add_argument("--crops", action="store_true", help="Audit answer and diagram cropped PNG assets")
     parser.add_argument("--pairing", action="store_true", help="Inspect exam question paper and solution file pairing")
     parser.add_argument("--sources", action="store_true", help="Inspect all banked exam sources in the store")
@@ -843,6 +925,10 @@ def main():
 
     if args.markers:
         success = inspect_paper_markers(args.markers)
+        sys.exit(0 if success else 1)
+
+    if args.diagnose_answer:
+        success = diagnose_answer_crop(args.diagnose_answer, as_json=args.json)
         sys.exit(0 if success else 1)
 
     if args.question:

@@ -29,7 +29,7 @@ def extract_meta(fn):
         if re.search(r'(?:^|[^a-z0-9])' + s.lower() + r'(?:[^a-z0-9]|$)', fn_lower):
             sch = s
             break
-    yr_m = re.search(r'\b(20[0-2]\d)\b', fn)
+    yr_m = re.search(r'(?:^|[^0-9])(20[0-2]\d)(?:[^0-9]|$)', fn)
     yr = yr_m.group(1) if yr_m else None
 
     p_m = re.search(r'(?:^|[^a-z0-9])(?:p|paper)[ _]?([12])(?:[^a-z0-9]|$)', fn_lower)
@@ -56,14 +56,14 @@ def resolve_solution_file(qp_fn, paper_num=None):
 
     qp_path = os.path.join(PAPERS_DIR, qp_fn)
 
-    # 1. Check if qp_fn itself contains solutions (>8 pages, has solutions section)
-    if os.path.exists(qp_path):
+    # 1. Check if qp_fn itself explicitly contains solutions (must have explicit markers and not be a pure QP)
+    if os.path.exists(qp_path) and not any(k in qp_fn.lower() for k in ['_qp_', '_questions_', '_qns_', '_question_paper_']):
         try:
             d = fitz.open(qp_path)
             if len(d) > 8:
                 for page_idx in range(len(d) - 1, max(4, len(d) - 25), -1):
                     txt = d[page_idx].get_text('text').lower()
-                    if 'solution' in txt or 'marking scheme' in txt or 'mark scheme' in txt:
+                    if any(w in txt for w in ['suggested solution', 'marking scheme', 'mark scheme', 'solutions to', 'examiners report', 'markers report']):
                         return qp_fn
         except Exception:
             pass
@@ -134,8 +134,12 @@ def resolve_solution_file(qp_fn, paper_num=None):
             score += 20
         if qp_meta['num'] and c_meta['num']:
             diff = abs(qp_meta['num'] - c_meta['num'])
-            if diff <= 10:
-                score += max(0, 15 - diff)
+            if diff <= 3:
+                score += 120 - (diff * 10)
+            elif diff <= 10:
+                score += max(0, 20 - diff)
+            elif (qp_meta['yr'] is None or c_meta['yr'] is None) and diff > 100:
+                score -= 40
         sol_cands.append((score, cand))
 
     if sol_cands:
@@ -206,7 +210,7 @@ def find_solution_markers(doc, start_p=0, end_p=None):
                 if re.search(r'\b(?:page|\d+\s+of|turn\s+over|www\.)\b', text, re.I):
                     continue
 
-                m_explicit = re.match(r'^(?:Question|Qn|Q|Soln|Solution(?:\s+for)?)\s*([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
+                m_explicit = re.match(r'^(?:Suggested\s+)?(?:Question|Qn|Q|Soln|Solution|Answer|Marking\s+Scheme)(?:\s+(?:to|for))?\s*(?:Question|Qn|Q)?\s*([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
                 m_bare = re.match(r'^([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text)
 
                 is_explicit = bool(m_explicit)
