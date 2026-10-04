@@ -84,4 +84,23 @@ test('PaperForge Diagnostic Tooling (scripts/diagnose.py): Persistent Health & A
   const jpjc22Q13 = jpjc22Questions.find((q) => q.id === 'jpjc-2022-p1-q13');
   assert.ok(jpjc22Q13, 'jpjc-2022-p1-q13 must exist');
   assert.strictEqual(jpjc22Q13.answerSlicesCount, 2, 'jpjc-2022-p1-q13 must have 2 solution slices');
+
+  // VJC 2022 Prelim P2 Q3: Must have 2 slices and verified rational function asymptotes working
+  const vjcRaw = execSync('python3 scripts/diagnose.py --question vjc-2022-p2-q03 --json', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  });
+  const vjcQuestions = JSON.parse(vjcRaw);
+  const vjcQ3 = vjcQuestions.find((q) => q.id === 'vjc-2022-p2-q03');
+  assert.ok(vjcQ3, 'vjc-2022-p2-q03 must exist');
+  assert.ok(vjcQ3.answerSlicesCount >= 2, 'vjc-2022-p2-q03 must have at least 2 solution slices');
+  assert.ok(vjcQ3.answerSnippet.includes('asymptotes'), 'Must contain rational function asymptotes working');
+
+  // Tandem Pairing Engine: 5/5 Sample Invariant
+  const sampleRaw = execSync('python3 scripts/tandem_diagnose.py --sample', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  });
+  assert.ok(sampleRaw.includes('ALL 5 SAMPLES PASSED'), 'Tandem pairing sample must pass 5/5');
 });
+

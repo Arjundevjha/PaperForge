@@ -18,16 +18,62 @@ STORE_PATH = 'packages/db/.paperforge-store.json'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ALL_PDFS = sorted(os.listdir(PAPERS_DIR)) if os.path.exists(PAPERS_DIR) else []
-SCHOOLS = ['ACJC', 'ASRJC', 'AJC', 'CJC', 'DHS', 'EJC', 'HCI', 'JPJC', 'JJC', 'MI', 'MJC', 'NJC', 'NYJC', 'PJC', 'RI', 'RVHS', 'SAJC', 'SRJC', 'TJC', 'TMJC', 'TPJC', 'VJC', 'YIJC', 'YJC']
+SCHOOL_ALIASES = {
+    'victoria': 'VJC', 'vjc': 'VJC',
+    'raffles': 'RI', 'ri': 'RI', 'rjc': 'RI',
+    'hwa chong': 'HCI', 'hwachong': 'HCI', 'hci': 'HCI',
+    'nanyang': 'NYJC', 'nyjc': 'NYJC',
+    'dunman': 'DHS', 'dhs': 'DHS',
+    'eunoia': 'EJC', 'ejc': 'EJC',
+    'national': 'NJC', 'njc': 'NJC',
+    'temasek': 'TJC', 'tjc': 'TJC',
+    'catholic': 'CJC', 'cjc': 'CJC',
+    'anderson': 'ASRJC', 'asrjc': 'ASRJC',
+    'jurong': 'JPJC', 'jpjc': 'JPJC',
+    'river valley': 'RVHS', 'rivervalley': 'RVHS', 'rvhs': 'RVHS',
+    'st andrew': 'SAJC', 'sajc': 'SAJC',
+    'anglo-chinese': 'ACJC', 'anglo chinese': 'ACJC', 'acjc': 'ACJC',
+    'tampines meridian': 'TMJC', 'tmjc': 'TMJC',
+    'yishun innova': 'YIJC', 'yijc': 'YIJC',
+    'innova': 'IJC', 'ijc': 'IJC',
+    'meridian': 'MJC', 'mjc': 'MJC',
+    'pioneer': 'PJC', 'pjc': 'PJC',
+    'serangoon': 'SRJC', 'srjc': 'SRJC',
+    'tampines': 'TPJC', 'tpjc': 'TPJC',
+    'millennia': 'MI', 'mi': 'MI',
+}
+
+def extract_year_from_doc(doc):
+    """Inspects cover / header text for exam year."""
+    for p_idx in range(min(3, len(doc))):
+        txt = doc[p_idx].get_text("text")
+        # 1. Contextual exam headers: e.g. "PRELIMINARY EXAMINATION 2022", "H2 MATHEMATICS 2021", "Promo 2023"
+        m = re.search(r'(?:preliminary|prelim|promo|promotional|examination|exam|mathematics|maths|math|jc2|jc1|h2)\b[^\n\r\d]{0,40}\b(20[0-2]\d)\b', txt, re.I)
+        if m:
+            return m.group(1)
+        # 2. Syllabus code headers: e.g. "9758/01/2022", "9740/01/2015"
+        m = re.search(r'97[45]\d/\d{2}/(?:[A-Z0-9]+/)?(20[0-2]\d)', txt)
+        if m:
+            return m.group(1)
+        # 3. Date headers: e.g. "September 2022", "Aug 2019"
+        m = re.search(r'(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(20[0-2]\d)', txt, re.I)
+        if m:
+            return m.group(1)
+        # 4. Copyright notices: e.g. "© HCI 2015"
+        m = re.search(r'©\s*[A-Za-z\s]{0,20}(20[0-2]\d)', txt)
+        if m:
+            return m.group(1)
+    return None
 
 def extract_meta(fn):
     if not fn:
         return {'sch': None, 'yr': None, 'p': None, 'typ': None, 'num': None, 'fn': ''}
     fn_lower = fn.lower()
     sch = None
-    for s in SCHOOLS:
-        if re.search(r'(?:^|[^a-z0-9])' + s.lower() + r'(?:[^a-z0-9]|$)', fn_lower):
-            sch = s
+    # Check aliases in descending order of length to prevent substring collision
+    for alias, code in sorted(SCHOOL_ALIASES.items(), key=lambda x: -len(x[0])):
+        if re.search(r'(?:^|[^a-z0-9])' + re.escape(alias) + r'(?:[^a-z0-9]|$)', fn_lower):
+            sch = code
             break
     yr_m = re.search(r'(?:^|[^0-9])(20[0-2]\d)(?:[^0-9]|$)', fn)
     yr = yr_m.group(1) if yr_m else None
@@ -55,6 +101,14 @@ def resolve_solution_file(qp_fn, paper_num=None):
         qp_meta['p'] = str(paper_num)
 
     qp_path = os.path.join(PAPERS_DIR, qp_fn)
+    if os.path.exists(qp_path) and not qp_meta['yr']:
+        try:
+            d = fitz.open(qp_path)
+            yr = extract_year_from_doc(d)
+            if yr:
+                qp_meta['yr'] = yr
+        except Exception:
+            pass
 
     # 1. Check if qp_fn itself explicitly contains solutions (must have explicit markers and not be a pure QP)
     if os.path.exists(qp_path) and not any(k in qp_fn.lower() for k in ['_qp_', '_questions_', '_qns_', '_question_paper_']):
@@ -99,47 +153,102 @@ def resolve_solution_file(qp_fn, paper_num=None):
         if cand == qp_fn:
             continue
         cand_lower = cand.lower()
-        if not any(k in cand_lower for k in ['sol', 'ans', 'ms', 'mark', 'report']):
-            continue
         c_meta = extract_meta(cand)
+        has_sol_keyword = any(k in cand_lower for k in ['sol', 'ans', 'ms', 'mark', 'report'])
+        
+        # If filename doesn't have 'sol' but has an adjacent upload ID (diff <= 3), verify if doc has solutions
+        if not has_sol_keyword:
+            if qp_meta['num'] and c_meta['num'] and abs(qp_meta['num'] - c_meta['num']) <= 3:
+                try:
+                    c_path = os.path.join(PAPERS_DIR, cand)
+                    doc_check = fitz.open(c_path)
+                    # Check first 5, middle, and last 5 pages
+                    sample_indices = set(list(range(min(5, len(doc_check)))) + 
+                                         list(range(max(0, len(doc_check) - 5), len(doc_check))) +
+                                         [len(doc_check) // 2, (len(doc_check) * 2) // 3])
+                    for p_check in sample_indices:
+                        txt_check = doc_check[p_check].get_text('text').lower()
+                        if any(w in txt_check for w in ['solution', 'mark scheme', 'marking scheme', 'suggested answer']):
+                            has_sol_keyword = True
+                            break
+                except Exception:
+                    pass
+
+        if not has_sol_keyword:
+            continue
 
         is_promo_cand = c_meta['typ'] == 'promo' or 'promo' in cand_lower
 
         # Strict separation: Promo must match Promo; Prelim must match Prelim
-        if is_promo_qp and not is_promo_cand:
-            continue
-        if not is_promo_qp and is_promo_cand:
+        if is_promo_qp != is_promo_cand:
             continue
 
-        # School must match
+        # Invariant 1: School Invariant
+        # If both schools are detected, they MUST match. Never allow cross-school pairing.
         if qp_meta['sch'] and c_meta['sch'] and qp_meta['sch'] != c_meta['sch']:
             continue
-        # Year must match
+        # If one or both schools are None, only permit if tight upload batch (diff <= 5)
+        if not qp_meta['sch'] or not c_meta['sch']:
+            is_tight_batch = bool(
+                qp_meta['num'] and c_meta['num'] and abs(qp_meta['num'] - c_meta['num']) <= 5
+                and (not qp_meta['yr'] or not c_meta['yr'] or qp_meta['yr'] == c_meta['yr'])
+                and (is_promo_qp or not qp_meta['p'] or not c_meta['p'] or qp_meta['p'] == c_meta['p'])
+            )
+            if not is_tight_batch:
+                continue
+
+        # Invariant 2: Year MUST match. Never allow cross-year pairing.
         if qp_meta['yr'] and c_meta['yr'] and qp_meta['yr'] != c_meta['yr']:
             continue
-        # Paper (P1 vs P2) must match for non-promo papers
+
+        # If candidate has no year in filename:
+        if qp_meta['yr'] and not c_meta['yr']:
+            is_adjacent = bool(qp_meta['num'] and c_meta['num'] and abs(qp_meta['num'] - c_meta['num']) <= 2)
+            if not is_adjacent:
+                try:
+                    c_doc = fitz.open(os.path.join(PAPERS_DIR, cand))
+                    c_yr = extract_year_from_doc(c_doc)
+                    if c_yr:
+                        c_meta['yr'] = c_yr
+                        if c_yr != qp_meta['yr']:
+                            continue
+                    else:
+                        continue
+                except Exception:
+                    continue
+
+        # Invariant 3: Paper (P1 vs P2) MUST match if candidate specifies a single paper.
+        # If candidate does NOT specify P1 or P2 in filename, it may be a bundled solution book.
         if not is_promo_qp and qp_meta['p'] and c_meta['p'] and qp_meta['p'] != c_meta['p']:
             continue
 
         score = 0
         if qp_meta['sch'] and c_meta['sch'] == qp_meta['sch']:
-            score += 50
+            score += 100
         if qp_meta['yr'] and c_meta['yr'] == qp_meta['yr']:
-            score += 40
+            score += 100
         if not is_promo_qp and qp_meta['p'] and c_meta['p'] == qp_meta['p']:
-            score += 40
+            score += 100
         if is_promo_qp and is_promo_cand:
-            score += 50
+            score += 100
         elif qp_meta['typ'] and c_meta['typ'] == qp_meta['typ']:
-            score += 20
+            score += 50
+
+        # Filename token overlap bonus
+        qp_tokens = set(re.findall(r'[a-z0-9]+', qp_fn.lower()))
+        cand_tokens = set(re.findall(r'[a-z0-9]+', cand.lower()))
+        common = qp_tokens & cand_tokens
+        score += len(common) * 10
+
+        # Consecutive ID match: in Singapore exam datasets, consecutive IDs (e.g. 6751 and 6752)
+        # belong to the exact same upload transaction / twin pair.
         if qp_meta['num'] and c_meta['num']:
             diff = abs(qp_meta['num'] - c_meta['num'])
-            if diff <= 3:
-                score += 120 - (diff * 10)
-            elif diff <= 10:
-                score += max(0, 20 - diff)
-            elif (qp_meta['yr'] is None or c_meta['yr'] is None) and diff > 100:
-                score -= 40
+            if diff <= 2:
+                score += 350 - (diff * 20)
+            elif diff <= 5:
+                score += 150 - (diff * 10)
+
         sol_cands.append((score, cand))
 
     if sol_cands:
@@ -210,8 +319,8 @@ def find_solution_markers(doc, start_p=0, end_p=None):
                 if re.search(r'\b(?:page|\d+\s+of|turn\s+over|www\.)\b', text, re.I):
                     continue
 
-                m_explicit = re.match(r'^(?:Suggested\s+)?(?:Question|Qn|Q|Soln|Solution|Answer|Marking\s+Scheme)(?:\s+(?:to|for))?\s*(?:Question|Qn|Q)?\s*([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
-                m_bare = re.match(r'^([1-9]|1[0-5])(?:[\.\:\)\(\]]|\s+|$)', text)
+                m_explicit = re.match(r'^(?:Suggested\s+)?(?:Question|Qn|Q|Soln|Solution|Answer|Marking\s+Scheme)(?:\s+(?:to|for))?\s*(?:Question|Qn|Q)?\s*([1-9]|1[0-5])(?:[a-d]|i{1,4}|iv|v)?(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
+                m_bare = re.match(r'^([1-9]|1[0-5])(?:[a-d]|i{1,4}|iv|v)?(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
 
                 is_explicit = bool(m_explicit)
                 m = m_explicit or m_bare
