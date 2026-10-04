@@ -91,6 +91,9 @@ All 12 publication-grade examination PDFs are compiled with authentic multi-slic
 
 | Component | Path | Status | Key Highlights |
 |---|---|---|---|
+| **Global Development Rules** | `~/.gemini/GEMINI.md` | Active & Enforced | Strict invariant: Zero static binary asset commits ever to Git; use cloud storage/CDN |
+| **Exam Compilation Standards Rule** | `.agents/rules/exam-compilation-standards.md` | Active & Enforced | Added Section 6 (Cloud CDN Distribution) and Section 7 (Zero-Fallback Curation) |
+| **Exam Screenshot Compiler Skill** | `.agents/skills/exam-document-screenshot-compiler/SKILL.md` | Active & Documented | Added Section 6 (Cloud CDN Sync Engine & CDN URL Resolution) |
 | **Cloud Asset Sync Engine** | `scripts/sync_crops_to_storage.ts` | Active & Run | Concurrently uploads worksheet question/answer crops to Supabase Storage |
 | **Storage CDN Helper** | `apps/web/src/lib/storage-url.ts` | Active & Tested | Generates public Supabase CDN URLs for question and answer crops |
 | **Teacher Resource Hub** | `apps/web/src/components/hub/TeacherResourceHub.tsx` | Active & Tested | Uses `getQuestionImageUrl` and `getAnswerImageUrl` for CDN image rendering |
@@ -105,10 +108,11 @@ All 12 publication-grade examination PDFs are compiled with authentic multi-slic
 
 ## 4. Verification & Health Summary
 
-1. **Unit & Pipeline Tests**: **40/40 passing tests** (`2.49s`).
+1. **Unit & Pipeline Tests**: **40/40 passing tests** (`2.38s`).
 2. **CDN HTTP Availability Verification**:
    - `questions/vjc-2023-p1-q12.png`: HTTP 200 (138,325 bytes, Cloudflare CDN cached).
    - `answers/cjc-2025-p1-q12.png`: HTTP 200 (280,002 bytes, Cloudflare CDN cached).
-3. **Fallow Dead-Code Audit**: **0 issues found** across 62 entry points (`0.04s`).
+3. **Fallow Dead-Code Audit**: **0 issues found** across 62 entry points (`0.05s`).
 4. **Next.js Production Build**: Turbopack compiled successfully in `1085ms` across all 15 routes.
 5. **Zero 0-Slice Questions**: Confirmed with `python3 scripts/diagnose.py --worksheets` that 0 questions across all 6 worksheets trigger text fallbacks.
+6. **Continuous Learning (/learn)**: Persisted universal global rule against static commits to `~/.gemini/GEMINI.md`, and updated workspace rules and skills.

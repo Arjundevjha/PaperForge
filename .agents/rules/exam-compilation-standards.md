@@ -35,3 +35,13 @@ description: Strict invariants for academic exam paper & answer key compilation 
 ## 5. Interactive On-the-Fly Reclassification
 - Never restrict syllabus reclassification to a separate review queue.
 - Live preview canvases and inspection drawers must expose direct reclassification controls with optimistic UI updates, compendium auto-transfer, and mark recounting.
+
+## 6. Cloud CDN Asset Distribution for Web Delivery
+- **Decoupled Asset Architecture**: To maintain clean git repositories (< 15 KiB pushes) while supporting serverless web deployments (Vercel, Cloudflare, Netlify), raw image screenshot crops (`questions/`, `answers/`) MUST NOT be committed to Git.
+- **Direct Cloud CDN Streaming**: Interactive web applications, student views, and Cambridge A4 print canvases MUST stream question and answer screenshots directly from the public Cloud Storage CDN (e.g. Supabase Storage `https://<ref>.supabase.co/storage/v1/object/public/<bucket>/...`).
+- **Zero Local Static Assumptions in Production**: Never assume `public/questions/*.png` exists in serverless runtime bundles. Always use centralized CDN URL resolvers (`getQuestionImageUrl`, `getAnswerImageUrl`) with local filesystem paths retained solely as a fallback for offline local development.
+
+## 7. The Zero-Fallback Curation Invariant
+- **No Silent Degradation to OCR Text**: A publication-grade compendium or curated worksheet MUST NEVER display raw OCR text dumps in place of examination questions or marking schemes.
+- **Pre-Publication Audit**: Before publishing or freezing any worksheet manifest, audit every question ID against the asset store. Any question lacking verified, multi-slice visual solution crops (due to unsearchable scanned papers or missing mark schemes) MUST be curated out and replaced with an authentic banked question that has verified visual crops.
+

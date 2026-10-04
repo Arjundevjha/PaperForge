@@ -117,9 +117,47 @@ def find_solution_markers(doc, start_p=0, end_p=None):
 ## 5. Verification & Test Protocol
 
 When modifying extraction or PDF compilation code:
-1. `npm test` — Ensure all unit and invariant tests pass (38/38).
+1. `npm test` — Ensure all unit and invariant tests pass.
 2. `npm run test:fallow` — Ensure 0 dead-code warnings across all entry points.
 3. Recompile sample answer key and inspect with PyMuPDF:
    - Confirm page count is consistent with question count (1–2 pages per question).
    - Verify 0 broken single-letter text lines.
 4. Verify Next.js production build (`npm --workspace=apps/web run build`).
+
+---
+
+## 6. Cloud CDN Asset Synchronization & Serverless Web Delivery
+
+When deploying PaperForge to serverless environments (Vercel, Cloudflare Pages):
+
+### 1. Asset Storage & CDN URL Resolution
+- Static question and answer crops (`apps/web/public/questions/`, `answers/`) are untracked in Git to prevent repo bloat.
+- Cloud assets are hosted in Supabase Storage (`paperforge` bucket under `questions/` and `answers/`).
+- The web app resolves images via `apps/web/src/lib/storage-url.ts`:
+  ```typescript
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const BUCKET = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'paperforge';
+  const SUPABASE_CDN_BASE = SUPABASE_URL ? `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}` : '';
+
+  export function getQuestionImageUrl(qid: string): string {
+    return SUPABASE_CDN_BASE ? `${SUPABASE_CDN_BASE}/questions/${qid}.png` : `/questions/${qid}.png`;
+  }
+
+  export function getAnswerImageUrl(qid: string, customDiagramUrl?: string): string {
+    return SUPABASE_CDN_BASE ? `${SUPABASE_CDN_BASE}/answers/${qid}.png` : (customDiagramUrl || `/answers/${qid}.png`);
+  }
+  ```
+
+### 2. Synchronization CLI
+Execute concurrent asset synchronization to upload all curated worksheet crops:
+```bash
+npx tsx scripts/sync_crops_to_storage.ts
+```
+The script runs with concurrency workers, streaming 1,800+ PNGs to Supabase Storage in ~25 seconds with 100% verification.
+
+### 3. Verification Commands
+Verify that individual assets resolve with HTTP 200 and public CORS headers:
+```bash
+curl -s -I "https://mavqeszmyxfdppckqprw.supabase.co/storage/v1/object/public/paperforge/questions/<qid>.png" | grep -E "HTTP/|content-type|access-control"
+```
+
