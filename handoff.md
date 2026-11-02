@@ -114,5 +114,5 @@
    Execute storage cleanup on `incoming/` raw PDFs in Supabase Storage to reclaim 582 MB for multi-subject rollout.
 2. **Ingest Additional Subjects**:
    Initialize folder pipelines for H2 Physics, H2 Chemistry, and H2 Biology under `papers/h2_physics/`, etc., using the certified tandem pairing and extraction architecture.
-3. **Deploy Web Application**:
-   Trigger Vercel production deployment (`vercel --prod`) to reflect the updated certified worksheets.
+3. **Web Application Deployment**:
+   Successfully deployed to Vercel production alias `https://paperforge-omega.vercel.app` (Deployment ID: `dpl_AiWBEZ2ub9X5juToercSjHcFyiJm`, Commit `e58b119`). 4-build buffer maintained and verified.
