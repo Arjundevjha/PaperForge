@@ -158,6 +158,36 @@ async function main() {
     console.log(`[✓] Upserted ${worksheetRows.length} worksheets.\n`);
   }
 
+  // 4b. Sync Worksheet Questions
+  console.log('[+] Phase 4b: Synchronizing worksheet_questions in Supabase PostgreSQL...');
+  const { error: delErr } = await supabase.from('worksheet_questions').delete().neq('worksheet_id', '');
+  if (delErr) {
+    console.error('Error clearing old worksheet_questions:', delErr.message);
+  } else {
+    console.log('  [✓] Cleared previous worksheet_questions.');
+  }
+
+  const worksheetQuestionRows: { worksheet_id: string; question_id: string; position: number }[] = [];
+  for (const w of worksheets) {
+    const qids: string[] = w.manifest?.questions || [];
+    qids.forEach((qid: string, idx: number) => {
+      worksheetQuestionRows.push({
+        worksheet_id: w.id,
+        question_id: qid,
+        position: idx + 1,
+      });
+    });
+  }
+
+  for (let i = 0; i < worksheetQuestionRows.length; i += 200) {
+    const batch = worksheetQuestionRows.slice(i, i + 200);
+    const { error: wqErr } = await supabase.from('worksheet_questions').insert(batch);
+    if (wqErr) {
+      console.error(`Error inserting worksheet_questions batch ${i}-${i + 200}:`, wqErr.message);
+    }
+  }
+  console.log(`[✓] Populated ${worksheetQuestionRows.length} worksheet_questions rows matching manifests.\n`);
+
   // 5. Verification
   console.log('================================================================');
   console.log('  VERIFIED POSTGRESQL ROW COUNTS');
@@ -166,13 +196,15 @@ async function main() {
   const { count: qCount } = await supabase.from('questions').select('*', { count: 'exact', head: true });
   const { count: aCount } = await supabase.from('answers').select('*', { count: 'exact', head: true });
   const { count: wsCount } = await supabase.from('worksheets').select('*', { count: 'exact', head: true });
+  const { count: wqCount } = await supabase.from('worksheet_questions').select('*', { count: 'exact', head: true });
   const { count: revCount } = await supabase.from('review_items').select('*', { count: 'exact', head: true });
 
-  console.log(`  Sources in PostgreSQL:      ${srcCount}`);
-  console.log(`  Questions in PostgreSQL:    ${qCount}`);
-  console.log(`  Answers in PostgreSQL:      ${aCount}`);
-  console.log(`  Worksheets in PostgreSQL:   ${wsCount}`);
-  console.log(`  Review Items in PostgreSQL: ${revCount}`);
+  console.log(`  Sources in PostgreSQL:              ${srcCount}`);
+  console.log(`  Questions in PostgreSQL:            ${qCount}`);
+  console.log(`  Answers in PostgreSQL:              ${aCount}`);
+  console.log(`  Worksheets in PostgreSQL:           ${wsCount}`);
+  console.log(`  Worksheet Questions in PostgreSQL:  ${wqCount}`);
+  console.log(`  Review Items in PostgreSQL:         ${revCount}`);
   console.log('================================================================\n');
 }
 

@@ -576,8 +576,92 @@ def dump_paper(query, max_pages=5, start_page=1):
     p_end = min(len(doc), p_start + max_pages)
     for p in range(p_start, p_end):
         print(f"\n--- PAGE {p+1} ---")
-        print(doc[p].get_text("text").strip())
+        page = doc[p]
+        imgs = page.get_images()
+        print(f"  Images on page: {len(imgs)} (rect: {page.rect})")
+        blocks = page.get_text("dict").get("blocks", [])
+        for b_idx, b in enumerate(blocks):
+            if "lines" in b:
+                for l in b["lines"]:
+                    line_txt = "".join(s["text"] for s in l["spans"]).strip()
+                    if line_txt:
+                        print(f"  [Text Block {b_idx}] bbox=({l['bbox'][0]:.1f}, {l['bbox'][1]:.1f}, {l['bbox'][2]:.1f}, {l['bbox'][3]:.1f}) | '{line_txt}'")
+            elif "image" in b:
+                print(f"  [Image Block {b_idx}] bbox=({b['bbox'][0]:.1f}, {b['bbox'][1]:.1f}, {b['bbox'][2]:.1f}, {b['bbox'][3]:.1f}) width={b.get('width')} height={b.get('height')}")
     print("=======================================================\n")
+    return True
+
+
+def render_paper(query, max_pages=10, out_dir=None):
+    if not PAPERS_DIR.exists():
+        print(f"[ERROR] Papers directory not found at {PAPERS_DIR}", file=sys.stderr)
+        return False
+    matches = list(PAPERS_DIR.glob(f"*{query}*.pdf"))
+    if not matches:
+        print(f"[-] No PDF found matching query: {query}")
+        return False
+    target = matches[0]
+    import fitz
+    doc = fitz.open(target)
+    if out_dir is None:
+        scratch_dir = Path("/Users/abc/.gemini/antigravity-cli/brain/2d3dad0f-4138-48d6-aff7-199fd276544f/scratch/rendered_papers")
+        scratch_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = scratch_dir / target.stem
+    else:
+        out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"\n[+] Rendering up to {max_pages} pages of {target.name} to {out_dir}...")
+    zoom = 150.0 / 72.0
+    mat = fitz.Matrix(zoom, zoom)
+    for p_idx in range(min(len(doc), max_pages)):
+        page = doc[p_idx]
+        pix = page.get_pixmap(matrix=mat)
+        p_path = out_dir / f"page_{p_idx + 1}.png"
+        pix.save(str(p_path))
+        print(f"  Rendered Page {p_idx + 1}: {p_path} ({pix.width}x{pix.height})")
+    print(f"[✓] Rendered {min(len(doc), max_pages)} pages.\n")
+    return True
+
+
+def measure_dividers(query):
+    matches = list(PAPERS_DIR.glob(f"*{query}*.pdf"))
+    if not matches:
+        print(f"[-] No PDF found matching query: {query}")
+        return False
+    target = matches[0]
+    import fitz
+    import numpy as np
+    doc = fitz.open(target)
+    print(f"\n[+] Detecting divider lines for {target.name} ({len(doc)} pages)...")
+    scale = 150.0 / 72.0
+    mat = fitz.Matrix(scale, scale)
+    for p_idx in range(len(doc)):
+        page = doc[p_idx]
+        pix = page.get_pixmap(matrix=mat, colorspace=fitz.csGRAY)
+        img = Image.frombytes('L', [pix.width, pix.height], pix.samples)
+        arr = np.array(img)
+        # Search between x=120 and x=680
+        col = arr[:, 140:680]
+        # Dark pixels have value < 100
+        dark_ratio = np.mean(col < 120, axis=1)
+        # Find peaks where dark_ratio > 0.5
+        lines = []
+        for y, r in enumerate(dark_ratio):
+            if r > 0.6:
+                lines.append((y, round(y / scale, 1), round(r, 2)))
+        # Cluster consecutive lines
+        clustered = []
+        for l in lines:
+            if not clustered or l[0] > clustered[-1][-1][0] + 5:
+                clustered.append([l])
+            else:
+                clustered[-1].append(l)
+        print(f"\n--- Page {p_idx + 1} Dividers ---")
+        for c in clustered:
+            best = max(c, key=lambda x: x[2])
+            print(f"  Divider at y_px={best[0]} -> pt={best[1]} (ratio={best[2]})")
+    print("\n=======================================================\n")
     return True
 
 
@@ -838,7 +922,7 @@ def diagnose_answer_crop(qid, as_json=False):
     start_p, end_p = gen.find_solution_section_range(doc, paper_num)
     print(f"Section Range:  pages {start_p+1} to {end_p} (0-idx: {start_p} to {end_p})")
 
-    markers = gen.find_solution_markers(doc, start_p, end_p)
+    markers = gen.find_solution_markers(doc, start_p, end_p, sol_fn=sol_fn)
     print(f"Found Markers:  {sorted(markers.keys())}")
     for k in sorted(markers.keys()):
         m = markers[k]
@@ -882,7 +966,9 @@ def main():
     parser.add_argument("--start-page", type=int, default=1, help="Start page for dump-paper")
     parser.add_argument("--max-pages", type=int, default=5, help="Number of pages to dump")
     parser.add_argument("--search-papers", type=str, help="Search inside all PDF papers for text snippet")
+    parser.add_argument("--measure-dividers", type=str, help="Detect horizontal divider lines in scanned PDF solutions")
     parser.add_argument("--markers", type=str, help="Inspect raw candidate markers for a PDF paper")
+    parser.add_argument("--render-paper", type=str, help="Render PDF pages to scratch directory for visual inspection")
     parser.add_argument("--optimize-crops", action="store_true", help="Convert all PNG crops to 8-bit grayscale for significant PDF size reduction")
     parser.add_argument("--rescale-worksheet", type=str, help="Rescale PNG crops for a worksheet (e.g. WS-MATH-06) to ensure PDF fits under 50 MB limit")
     parser.add_argument("--scale", type=float, default=0.75, help="Scale factor for rescaling (default 0.75)")
@@ -923,8 +1009,16 @@ def main():
         success = search_papers(args.search_papers)
         sys.exit(0 if success else 1)
 
+    if args.measure_dividers:
+        success = measure_dividers(args.measure_dividers)
+        sys.exit(0 if success else 1)
+
     if args.markers:
         success = inspect_paper_markers(args.markers)
+        sys.exit(0 if success else 1)
+
+    if args.render_paper:
+        success = render_paper(args.render_paper, max_pages=args.max_pages)
         sys.exit(0 if success else 1)
 
     if args.diagnose_answer:
