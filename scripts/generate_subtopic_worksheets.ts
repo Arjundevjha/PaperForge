@@ -244,15 +244,32 @@ const SPECIFIC_OVERRIDES: Record<string, { chapter: string; subtopic: string }> 
 
 function normalizeSubtopic(chapter: string, rawSubtopic?: string | null): string | null {
   if (!rawSubtopic) return null;
-  const lower = rawSubtopic.toLowerCase().trim();
+  // Strip parenthetical descriptors e.g. "Functions (domain, range...)" -> "Functions"
+  let stripped = rawSubtopic.split('(')[0].trim();
+  if (stripped.includes(',')) {
+    stripped = stripped.split(',')[0].trim();
+  }
+  const lower = stripped.toLowerCase();
   for (const spec of SUBTOPIC_SPECS) {
     if (spec.chapter.toLowerCase() === chapter.toLowerCase()) {
-      if (spec.aliases.some((a) => a === lower)) {
+      if (
+        spec.subtopic.toLowerCase() === lower ||
+        spec.aliases.some((a) => a === lower)
+      ) {
         return spec.subtopic;
       }
     }
   }
-  return rawSubtopic;
+  // Try across all specs regardless of chapter if subtopic is unique
+  for (const spec of SUBTOPIC_SPECS) {
+    if (
+      spec.subtopic.toLowerCase() === lower ||
+      spec.aliases.some((a) => a === lower)
+    ) {
+      return spec.subtopic;
+    }
+  }
+  return stripped;
 }
 
 function main() {
