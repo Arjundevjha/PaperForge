@@ -116,9 +116,15 @@ Respond ONLY with a valid JSON object matching this structure:
 
       if (res.status === 429 && attempt < maxRetries) {
         const retryAfter = res.headers.get('retry-after');
-        const delayMs = retryAfter
-          ? Math.max(1000, parseFloat(retryAfter) * 1000)
-          : Math.min(8000, 1500 * Math.pow(2, attempt));
+        const parsedWait = retryAfter ? parseFloat(retryAfter) * 1000 : 0;
+        // If the upstream API asks us to wait more than 6 seconds, fall back immediately to avoid stalling
+        if (parsedWait > 6000) {
+          console.warn(`[Groq Classifier] HTTP 429 reset window is ${Math.round(parsedWait / 1000)}s: falling back to deterministic matcher.`);
+          return classifyQuestionContent(subject, textContent);
+        }
+        const delayMs = parsedWait > 0
+          ? Math.max(1000, parsedWait)
+          : Math.min(5000, 1500 * Math.pow(2, attempt));
         console.warn(`[Groq Classifier] HTTP 429 (Rate Limit). Retrying in ${Math.round(delayMs)}ms (attempt ${attempt + 1}/${maxRetries})...`);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;

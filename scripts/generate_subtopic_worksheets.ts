@@ -141,7 +141,7 @@ const SUBTOPIC_SPECS: SubtopicSpec[] = [
     subtopic: 'Argand Diagrams & Loci',
     subtopicId: 'math-04-03',
     title: 'Argand Diagrams & Geometric Loci',
-    aliases: ['argand diagrams & loci', 'argand diagrams and loci', 'argand diagrams'],
+    aliases: ['argand diagrams & loci', 'argand diagrams and loci', 'argand diagrams', 'argand diagrams & geometric loci', 'argand diagrams and geometric loci'],
   },
 
   // Category 5: Calculus
@@ -153,7 +153,7 @@ const SUBTOPIC_SPECS: SubtopicSpec[] = [
     subtopic: 'Differentiation & Applications',
     subtopicId: 'math-05-01',
     title: 'Differentiation Techniques & Applications (Tangents, Rates, Max/Min)',
-    aliases: ['differentiation & applications', 'applications of differentiation', 'differentiation techniques'],
+    aliases: ['differentiation & applications', 'applications of differentiation', 'differentiation techniques', 'differentiation techniques & applications', 'differentiation techniques and applications'],
   },
   {
     wsId: 'ws_math_05_02_integration',
