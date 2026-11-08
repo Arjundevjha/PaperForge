@@ -28,8 +28,9 @@ if (fs.existsSync(ENV_PATH)) {
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
-const BATCH_SIZE = 8;
-const DELAY_MS = 2200; // Stay within 30 requests per minute
+const BATCH_SIZE = parseInt(process.env.GROQ_BATCH_SIZE || '1', 10); // Default 1 question per call to avoid TPM bursts
+const BASE_DELAY_MS = 6000; // 6-second baseline buffer (5-10s staggered interval)
+const JITTER_MS = 2500; // Up to 2.5s jitter (6.0s - 8.5s total buffer)
 
 function sanitizeMathText(raw: string): string {
   if (!raw) return '';
@@ -121,6 +122,16 @@ Respond ONLY with valid JSON in this exact structure:
         temperature: 0.1,
       }),
     });
+
+    if (res && res.headers) {
+      const remainingTokens = res.headers.get('x-ratelimit-remaining-tokens');
+      const resetTokens = res.headers.get('x-ratelimit-reset-tokens');
+      if (remainingTokens && parseInt(remainingTokens, 10) < 2000) {
+        const pauseMs = resetTokens ? Math.ceil(parseFloat(resetTokens) * 1000) : 6000;
+        console.warn(`[Groq TPM Guard] Remaining tokens low (${remainingTokens}). Enforcing adaptive pause of ${pauseMs}ms...`);
+        await new Promise((r) => setTimeout(r, pauseMs));
+      }
+    }
 
     if (res.status === 429 && attempt < maxRetries) {
       const retryAfter = res.headers.get('retry-after');
@@ -217,7 +228,9 @@ async function main() {
         fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf-8');
       }
 
-      await new Promise((r) => setTimeout(r, DELAY_MS));
+      // Stagger consecutive calls with a 5-10s buffer (6.0s base + random jitter up to 2.5s)
+      const staggerDelay = BASE_DELAY_MS + Math.floor(Math.random() * JITTER_MS);
+      await new Promise((r) => setTimeout(r, staggerDelay));
     } catch (err) {
       console.error(`[!] Error processing batch ${bIdx + 1}:`, err);
       await new Promise((r) => setTimeout(r, 4000));

@@ -10,6 +10,30 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
 
 /**
+ * Global promise queue to serialize and stagger requests to Groq Cloud.
+ * Enforces a 5-10 second buffer between consecutive calls to completely prevent
+ * hitting TPM/RPM rate limits or triggering 15-minute backoff penalties.
+ */
+let groqRequestQueue: Promise<void> = Promise.resolve();
+const BASE_BUFFER_MS = Math.max(5000, parseInt(process.env.GROQ_STAGGER_BUFFER_MS || '6500', 10));
+
+async function executeWithStagger<T>(task: () => Promise<T>): Promise<T> {
+  const next = groqRequestQueue.then(async () => {
+    try {
+      return await task();
+    } finally {
+      // Add random jitter (0 to 1500ms) over base buffer (default 6500ms -> 6.5s to 8.0s total buffer)
+      const jitterMs = Math.floor(Math.random() * 1500);
+      const delayMs = BASE_BUFFER_MS + jitterMs;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  });
+
+  groqRequestQueue = next.then(() => {}, () => {});
+  return next;
+}
+
+/**
  * Normalizes private use font characters and common LaTeX symbols
  */
 function sanitizeForLLM(raw: string): string {
@@ -93,52 +117,66 @@ Respond ONLY with a valid JSON object matching this structure:
 }`;
 
   try {
-    let res: Response | null = null;
-    const maxRetries = 3;
+    const rawContent = await executeWithStagger(async () => {
+      let res: Response | null = null;
+      const maxRetries = 3;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      res = await fetch(GROQ_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${effectiveKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: process.env.GROQ_MODEL || DEFAULT_MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: cleanText },
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.1,
-        }),
-      });
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        res = await fetch(GROQ_API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${effectiveKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: process.env.GROQ_MODEL || DEFAULT_MODEL,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: cleanText },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.1,
+          }),
+        });
 
-      if (res.status === 429 && attempt < maxRetries) {
-        const retryAfter = res.headers.get('retry-after');
-        const parsedWait = retryAfter ? parseFloat(retryAfter) * 1000 : 0;
-        // If the upstream API asks us to wait more than 6 seconds, fall back immediately to avoid stalling
-        if (parsedWait > 6000) {
-          console.warn(`[Groq Classifier] HTTP 429 reset window is ${Math.round(parsedWait / 1000)}s: falling back to deterministic matcher.`);
-          return classifyQuestionContent(subject, textContent);
+        // Proactive token pacing: inspect x-ratelimit headers
+        if (res && res.headers) {
+          const remainingTokens = res.headers.get('x-ratelimit-remaining-tokens');
+          const resetTokens = res.headers.get('x-ratelimit-reset-tokens');
+          if (remainingTokens && parseInt(remainingTokens, 10) < 1500) {
+            const pauseMs = resetTokens ? Math.ceil(parseFloat(resetTokens) * 1000) : 5000;
+            console.warn(`[Groq Classifier] Remaining tokens low (${remainingTokens}). Proactively pacing for ${pauseMs}ms...`);
+            await new Promise((r) => setTimeout(r, Math.min(8000, pauseMs)));
+          }
         }
-        const delayMs = parsedWait > 0
-          ? Math.max(1000, parsedWait)
-          : Math.min(5000, 1500 * Math.pow(2, attempt));
-        console.warn(`[Groq Classifier] HTTP 429 (Rate Limit). Retrying in ${Math.round(delayMs)}ms (attempt ${attempt + 1}/${maxRetries})...`);
-        await new Promise((r) => setTimeout(r, delayMs));
-        continue;
+
+        if (res.status === 429 && attempt < maxRetries) {
+          const retryAfter = res.headers.get('retry-after');
+          const parsedWait = retryAfter ? parseFloat(retryAfter) * 1000 : 0;
+          // If the upstream API asks us to wait more than 6 seconds, fall back immediately to avoid stalling
+          if (parsedWait > 6000) {
+            console.warn(`[Groq Classifier] HTTP 429 reset window is ${Math.round(parsedWait / 1000)}s: falling back to deterministic matcher.`);
+            return null;
+          }
+          const delayMs = parsedWait > 0
+            ? Math.max(1000, parsedWait)
+            : Math.min(5000, 1500 * Math.pow(2, attempt));
+          console.warn(`[Groq Classifier] HTTP 429 (Rate Limit). Retrying in ${Math.round(delayMs)}ms (attempt ${attempt + 1}/${maxRetries})...`);
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+        break;
       }
-      break;
-    }
 
-    if (!res || !res.ok) {
-      console.warn(`[Groq Classifier] API error HTTP ${res?.status}: falling back to deterministic matcher.`);
-      return classifyQuestionContent(subject, textContent);
-    }
+      if (!res || !res.ok) {
+        console.warn(`[Groq Classifier] API error HTTP ${res?.status}: falling back to deterministic matcher.`);
+        return null;
+      }
 
-    const data = await res.json();
-    const rawContent = data.choices?.[0]?.message?.content;
+      const data = await res.json();
+      return (data.choices?.[0]?.message?.content as string) || null;
+    });
+
     if (!rawContent) {
       return classifyQuestionContent(subject, textContent);
     }

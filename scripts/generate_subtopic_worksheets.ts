@@ -316,13 +316,33 @@ function main() {
   for (const q of curatedQuestions) {
     // Match question to spec
     let matchedSpec: SubtopicSpec | undefined;
+    
+    // Priority 1: Match both chapter AND subtopic (or subtopic alias)
     for (const spec of SUBTOPIC_SPECS) {
-      if (
-        spec.chapter.toLowerCase() === (q.chapter || '').toLowerCase() &&
-        spec.subtopic.toLowerCase() === (q.subtopic || '').toLowerCase()
-      ) {
-        matchedSpec = spec;
-        break;
+      if (spec.chapter.toLowerCase() === (q.chapter || '').toLowerCase()) {
+        if (
+          spec.subtopic.toLowerCase() === (q.subtopic || '').toLowerCase() ||
+          spec.aliases.some((a) => a === (q.subtopic || '').toLowerCase())
+        ) {
+          matchedSpec = spec;
+          break;
+        }
+      }
+    }
+
+    // Priority 2: Subtopics in SEAB H2 Math are mutually disjoint; match by unique subtopic
+    if (!matchedSpec) {
+      for (const spec of SUBTOPIC_SPECS) {
+        if (
+          spec.subtopic.toLowerCase() === (q.subtopic || '').toLowerCase() ||
+          spec.aliases.some((a) => a === (q.subtopic || '').toLowerCase())
+        ) {
+          matchedSpec = spec;
+          // Harmonize chapter & subtopic to canonical specification
+          q.chapter = spec.chapter;
+          q.subtopic = spec.subtopic;
+          break;
+        }
       }
     }
 
