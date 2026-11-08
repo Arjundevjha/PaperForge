@@ -187,6 +187,8 @@ export interface WorksheetManifest {
   worksheetId: string;
   version: number;
   chapter: string;
+  subtopic?: string;
+  subtopicId?: string;
   subject: SubjectId;
   questions: string[]; // Ordered array of Question IDs
   totalMarks: number;
@@ -195,10 +197,13 @@ export interface WorksheetManifest {
 
 export interface Worksheet {
   id: string;
-  worksheetNumber: string; // e.g. 'WS-01'
+  worksheetNumber: string; // e.g. 'WS-01' or 'WS-MATH-01-01'
   title: string;
   subject: SubjectId;
   chapter: string;
+  subtopic?: string;
+  subtopicId?: string;
+  categoryId?: string;
   syllabusVersionId: string;
   version: number;
   questionCount: number;

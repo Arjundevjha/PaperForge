@@ -20,7 +20,7 @@ import {
   formatProvenance,
 } from '@paperforge/shared';
 import { hashNormalizedText, computeVisualHash } from '@paperforge/dedup';
-import { classifyQuestionContent } from '@paperforge/classification';
+import { classifyQuestionContent, classifyWithGroq } from '@paperforge/classification';
 import { getStorageProvider } from '@paperforge/storage';
 import { getSupabaseAdmin } from '../../../lib/supabase/admin';
 import { syncAllQuestionsFromDb } from '../../../lib/supabase/db-sync';
@@ -347,7 +347,7 @@ export async function POST(request: Request) {
         );
         prov.citation = `[${compositeAttribution} ${detectedYear} H2 Math Promo P${detectedPaperNumber} Q${rq.num}]`;
 
-        const classification = classifyQuestionContent(detectedSubject, rq.text);
+        const classification = await classifyWithGroq(detectedSubject, rq.text);
         const textHash = hashNormalizedText(rq.text);
         const visualHash = rq.has_diagram
           ? computeVisualHash(`diagram-${primarySchool}-q${rq.num}-${detectedYear}`)

@@ -56,6 +56,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
   const currentMeta = SUBJECT_METADATA[activeSubject];
 
   const [selectedChapterId, setSelectedChapterId] = useState<string>('all');
+  const [selectedSubtopic, setSelectedSubtopic] = useState<string>('all');
   const [selectedWorksheetId, setSelectedWorksheetId] = useState<string>(
     worksheets[0]?.id || ''
   );
@@ -71,15 +72,26 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
     setDisplayLimit(30);
   }, [selectedWorksheetId]);
 
+  useEffect(() => {
+    setSelectedSubtopic('all');
+  }, [selectedChapterId]);
+
   const selectedChapter = currentSyllabus.chapters.find((c) => c.id === selectedChapterId);
 
-  // Filter worksheets by chapter
-  const filteredWorksheets = worksheets.filter((ws) => {
+  // Filter worksheets by category / chapter
+  const categoryWorksheets = worksheets.filter((ws) => {
     if (ws.subject !== activeSubject) return false;
     if (selectedChapterId === 'all') return true;
     return selectedChapter
       ? ws.chapter.trim().toLowerCase() === selectedChapter.name.trim().toLowerCase()
       : true;
+  });
+
+  // Filter worksheets by subtopic
+  const filteredWorksheets = categoryWorksheets.filter((ws) => {
+    if (selectedSubtopic === 'all') return true;
+    const wsSub = ws.subtopic || ws.title;
+    return wsSub.trim().toLowerCase() === selectedSubtopic.trim().toLowerCase();
   });
 
   const activeWorksheet =
@@ -185,6 +197,45 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
               </button>
             ))}
           </div>
+
+          {/* Subtopic Filter Chips (Active when a Chapter is selected or when multiple subtopics exist) */}
+          {categoryWorksheets.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
+              <span className="text-[11px] font-mono text-[#64748b] shrink-0 mr-1">
+                Subtopics:
+              </span>
+              <button
+                onClick={() => setSelectedSubtopic('all')}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium whitespace-nowrap transition-colors ${
+                  selectedSubtopic === 'all'
+                    ? 'bg-primary-cyan/20 text-primary-cyan border border-primary-cyan/40 font-semibold'
+                    : 'bg-surface-2 text-[#94a3b8] hover:text-[#f1f5f9] border border-border-subdued'
+                }`}
+              >
+                All Subtopics ({categoryWorksheets.length})
+              </button>
+              {categoryWorksheets.map((ws) => {
+                const subLabel = ws.subtopic || ws.title.split('(')[0].trim();
+                const isSubActive = selectedSubtopic === (ws.subtopic || ws.title);
+                return (
+                  <button
+                    key={ws.id}
+                    onClick={() => {
+                      setSelectedSubtopic(ws.subtopic || ws.title);
+                      setSelectedWorksheetId(ws.id);
+                    }}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium whitespace-nowrap transition-colors ${
+                      isSubActive
+                        ? 'bg-primary-cyan/20 text-primary-cyan border border-primary-cyan/40 font-semibold'
+                        : 'bg-surface-2 text-[#94a3b8] hover:text-[#f1f5f9] border border-border-subdued'
+                    }`}
+                  >
+                    {subLabel} ({ws.questionCount})
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Nationwide JC Coverage Bar */}
           <div className="flex items-center justify-between px-3 py-2 rounded bg-surface-2/70 border border-border-subdued text-[11px]">
@@ -410,7 +461,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                 {currentMeta.level.toUpperCase()} {currentMeta.name.toUpperCase()} • CODE {currentMeta.syllabusCode}
               </div>
               <div className="text-[11px] font-sans text-[#374151] mt-0.5">
-                Chapter: {activeWorksheet?.chapter || selectedChapter?.name || 'All Topics Revision'} [{activeWorksheet?.worksheetNumber || 'WS-01'}]
+                {activeWorksheet?.chapter || selectedChapter?.name || 'All Topics Revision'} • {activeWorksheet?.title || activeWorksheet?.subtopic || 'Comprehensive Practice'} [{activeWorksheet?.worksheetNumber || 'WS-01'}]
               </div>
             </div>
 

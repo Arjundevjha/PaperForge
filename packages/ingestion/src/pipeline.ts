@@ -17,7 +17,7 @@ import {
 } from '@paperforge/shared';
 import { getStorageProvider } from '@paperforge/storage';
 import { hashNormalizedText, computeVisualHash } from '@paperforge/dedup';
-import { classifyQuestionContent } from '@paperforge/classification';
+import { classifyQuestionContent, classifyWithGroq } from '@paperforge/classification';
 import { PairedPaperSet, IngestionJobResult, BulkRunReport } from './types';
 import { runWorkerPool } from './worker-pool';
 
@@ -123,7 +123,7 @@ export async function processPaperSet(set: PairedPaperSet): Promise<IngestionJob
       );
       prov.citation = `[${compositeAttribution} ${set.year} ${set.subject} P${set.paperNumber} Q${rq.num}]`;
 
-      const classification = classifyQuestionContent(set.subject, rq.text);
+      const classification = await classifyWithGroq(set.subject, rq.text);
       const textHash = hashNormalizedText(rq.text);
       const visualHash = rq.has_diagram
         ? computeVisualHash(`diagram-${set.school}-q${rq.num}-${set.year}`)

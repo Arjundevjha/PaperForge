@@ -51,6 +51,8 @@ export const WorksheetManifestSchema = z.object({
   worksheetId: z.string().min(1),
   version: z.number().int().positive(),
   chapter: z.string().min(1),
+  subtopic: z.string().optional(),
+  subtopicId: z.string().optional(),
   subject: SubjectIdSchema,
   questions: z.array(z.string().min(1)).min(1),
   totalMarks: z.number().int().nonnegative(),

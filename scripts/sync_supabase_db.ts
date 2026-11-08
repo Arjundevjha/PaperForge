@@ -134,7 +134,13 @@ async function main() {
   console.log(`[✓] Upserted ${answerRows.length} answers.\n`);
 
   // 4. Upsert Worksheets
-  console.log('[+] Phase 4: Upserting worksheets into Supabase PostgreSQL...');
+  console.log('[+] Phase 4: Synchronizing worksheets into Supabase PostgreSQL...');
+  // Clear stale worksheets to ensure exact parity with new 19 subtopic worksheets
+  const { error: wsDelErr } = await supabase.from('worksheets').delete().neq('id', '');
+  if (wsDelErr) {
+    console.warn('Notice clearing old worksheets:', wsDelErr.message);
+  }
+
   const worksheetRows = worksheets.map((w: any) => ({
     id: w.id,
     worksheet_number: w.worksheetNumber || w.id.toUpperCase(),

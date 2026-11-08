@@ -165,6 +165,9 @@ export async function syncWorksheetsFromDb(store: PaperForgeDataStore, force = f
           title: w.title,
           subject: w.subject,
           chapter: w.chapter,
+          subtopic: w.subtopic || undefined,
+          subtopicId: w.subtopic_id || undefined,
+          categoryId: w.category_id || undefined,
           syllabusVersionId: w.syllabus_version_id,
           version: w.version,
           questionCount: w.question_count,
@@ -176,6 +179,8 @@ export async function syncWorksheetsFromDb(store: PaperForgeDataStore, force = f
             version: w.version,
             subject: w.subject,
             chapter: w.chapter,
+            subtopic: w.subtopic || undefined,
+            subtopicId: w.subtopic_id || undefined,
             questions: questionIds,
             totalMarks: w.total_marks,
             frozenAt: w.generated_at,
@@ -216,13 +221,32 @@ export async function reclassifyQuestionInDb(
   let movedFromWorksheet: string | undefined;
   let movedToWorksheet: string | undefined;
 
-  // If chapter changed, move question between worksheets in the in-memory store
-  if (oldChapter && oldChapter.toLowerCase() !== chapter.toLowerCase()) {
-    const allWorksheets = store.listWorksheets();
-    const oldWs = allWorksheets.find((w) => w.chapter.toLowerCase() === oldChapter.toLowerCase());
-    const newWs = allWorksheets.find((w) => w.chapter.toLowerCase() === chapter.toLowerCase());
+  const oldSubtopic = existing?.subtopic;
+  const isChanged =
+    (oldChapter && oldChapter.toLowerCase() !== chapter.toLowerCase()) ||
+    (subtopic && oldSubtopic && oldSubtopic.toLowerCase() !== subtopic.toLowerCase());
 
-    if (oldWs && newWs) {
+  // If chapter or subtopic changed, move question between worksheets
+  if (isChanged) {
+    const allWorksheets = store.listWorksheets();
+    const findWs = (ch?: string, sub?: string | null) => {
+      if (!ch) return undefined;
+      if (sub) {
+        const exact = allWorksheets.find(
+          (w) =>
+            w.chapter.toLowerCase() === ch.toLowerCase() &&
+            (w.subtopic?.toLowerCase() === sub.toLowerCase() ||
+              w.title.toLowerCase().includes(sub.toLowerCase()))
+        );
+        if (exact) return exact;
+      }
+      return allWorksheets.find((w) => w.chapter.toLowerCase() === ch.toLowerCase());
+    };
+
+    const oldWs = findWs(oldChapter, oldSubtopic);
+    const newWs = findWs(chapter, subtopic);
+
+    if (oldWs && newWs && oldWs.id !== newWs.id) {
       store.moveQuestionBetweenWorksheets(questionId, oldWs.id, newWs.id);
       movedFromWorksheet = oldWs.worksheetNumber;
       movedToWorksheet = newWs.worksheetNumber;
@@ -243,15 +267,27 @@ export async function reclassifyQuestionInDb(
 
       await supabase.from('questions').update(updates).eq('id', questionId);
 
-      if (oldChapter && oldChapter.toLowerCase() !== chapter.toLowerCase()) {
+      if (isChanged) {
         const { data: wsRows } = await supabase
           .from('worksheets')
-          .select('id, chapter, worksheet_number, question_count, total_marks')
-          .in('chapter', [oldChapter, chapter]);
+          .select('id, chapter, title, worksheet_number, question_count, total_marks');
 
         if (wsRows && wsRows.length > 0) {
-          const oldWsRow = wsRows.find((w) => w.chapter.toLowerCase() === oldChapter.toLowerCase());
-          const newWsRow = wsRows.find((w) => w.chapter.toLowerCase() === chapter.toLowerCase());
+          const findWsRow = (ch?: string, sub?: string | null) => {
+            if (!ch) return undefined;
+            if (sub) {
+              const exact = wsRows.find(
+                (w) =>
+                  w.chapter.toLowerCase() === ch.toLowerCase() &&
+                  w.title.toLowerCase().includes(sub.toLowerCase())
+              );
+              if (exact) return exact;
+            }
+            return wsRows.find((w) => w.chapter.toLowerCase() === ch.toLowerCase());
+          };
+
+          const oldWsRow = findWsRow(oldChapter, oldSubtopic);
+          const newWsRow = findWsRow(chapter, subtopic);
 
           if (oldWsRow) {
             await supabase
