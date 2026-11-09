@@ -297,7 +297,7 @@ function main() {
       if (!curatedQidSet.has(qid)) {
         curatedQidSet.add(qid);
         const q = questionsMap.get(qid);
-        if (q) curatedQuestions.push(q);
+        if (q && !q.isAnswerKeyLeak) curatedQuestions.push(q);
       }
     }
   }
