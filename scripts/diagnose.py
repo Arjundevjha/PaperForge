@@ -177,6 +177,21 @@ def inspect_crops(as_json=False):
     for qid, count in slice_distribution.items():
         distribution_counts[count] = distribution_counts.get(count, 0) + 1
 
+    # Check for short answer crops (< 120px height)
+    short_crops = []
+    for f in composites:
+        try:
+            with Image.open(f) as img:
+                if img.height < 120:
+                    short_crops.append({
+                        "file": f.name,
+                        "qid": f.stem,
+                        "width": img.width,
+                        "height": img.height
+                    })
+        except Exception:
+            pass
+
     total_ans_bytes = sum(f.stat().st_size for f in ans_files)
     total_diag_bytes = sum(f.stat().st_size for f in diag_files)
 
@@ -188,6 +203,8 @@ def inspect_crops(as_json=False):
         "questionsWithSlices": len(slice_distribution),
         "sliceCountDistribution": distribution_counts,
         "totalAnswerSizeMB": round(total_ans_bytes / (1024 * 1024), 2),
+        "shortAnswerCropsCount": len(short_crops),
+        "shortAnswerCrops": short_crops,
         "diagramsDir": str(DIAGRAMS_DIR),
         "totalDiagramFiles": len(diag_files),
         "totalDiagramSizeMB": round(total_diag_bytes / (1024 * 1024), 2),
@@ -211,6 +228,15 @@ def inspect_crops(as_json=False):
 
     print(f"\nQuestion Diagram Directory: {data['diagramsDir']}")
     print(f"Total Diagram Assets:       {data['totalDiagramFiles']} PNGs ({data['totalDiagramSizeMB']} MB)")
+
+    if data['shortAnswerCropsCount'] > 0:
+        print(f"\n[!] WARNING: {data['shortAnswerCropsCount']} answer key(s) with height < 120px:")
+        for sc in data['shortAnswerCrops'][:20]:
+            print(f"  - {sc['file']} ({sc['width']}x{sc['height']} px)")
+        if data['shortAnswerCropsCount'] > 20:
+            print(f"  ... and {data['shortAnswerCropsCount'] - 20} more.")
+    else:
+        print("\n[✓] All answer key crops meet the >= 120px height standard.")
     print("=======================================================\n")
     return True
 
@@ -897,50 +923,82 @@ def diagnose_answer_crop(qid, as_json=False):
     # Import cropper resolution logic
     import generate_all_answer_screenshots as gen
 
-    print(f"\n=======================================================")
-    print(f"       DIAGNOSING ANSWER CROP FOR: {qid}")
-    print(f"=======================================================")
-    print(f"Provenance:     {prov.get('display', 'Unknown')}")
-    print(f"Is Promo:       {is_promo}")
-    print(f"Paper Number:   {paper_num}")
-    print(f"Question Paper: {qp_fn}")
+    if not as_json:
+        print(f"\n=======================================================")
+        print(f"       DIAGNOSING ANSWER CROP FOR: {qid}")
+        print(f"=======================================================")
+        print(f"Provenance:     {prov.get('display', 'Unknown')}")
+        print(f"Is Promo:       {is_promo}")
+        print(f"Paper Number:   {paper_num}")
+        print(f"Question Paper: {qp_fn}")
 
     sol_fn = gen.resolve_solution_file(qp_fn, paper_num)
-    print(f"Resolved Sol:   {sol_fn}")
+    if not as_json:
+        print(f"Resolved Sol:   {sol_fn}")
 
     if not sol_fn:
-        print("[!] Failed to resolve solution file!")
+        if as_json:
+            print(json.dumps({"qid": qid, "error": "Failed to resolve solution file"}, indent=2))
+        else:
+            print("[!] Failed to resolve solution file!")
         return False
 
     sol_path = PAPERS_DIR / sol_fn
     if not sol_path.exists():
-        print(f"[!] Solution file does not exist on disk: {sol_path}")
+        if as_json:
+            print(json.dumps({"qid": qid, "error": f"Solution file does not exist on disk: {sol_path}"}, indent=2))
+        else:
+            print(f"[!] Solution file does not exist on disk: {sol_path}")
         return False
 
     doc = fitz.open(str(sol_path))
-    print(f"Doc Pages:      {len(doc)}")
-    start_p, end_p = gen.find_solution_section_range(doc, paper_num)
-    print(f"Section Range:  pages {start_p+1} to {end_p} (0-idx: {start_p} to {end_p})")
-
+    start_p, end_p = gen.find_solution_section_range(doc, paper_num, sol_fn=sol_fn)
     markers = gen.find_solution_markers(doc, start_p, end_p, sol_fn=sol_fn)
-    print(f"Found Markers:  {sorted(markers.keys())}")
-    for k in sorted(markers.keys()):
-        m = markers[k]
-        print(f"  Q{k:02d} -> Page {m['page']+1} (0-idx: {m['page']}) at y0={m['y0']:.1f}, x0={m['x0']:.1f} | text='{m['text']}'")
+
+    if not as_json:
+        print(f"Doc Pages:      {len(doc)}")
+        print(f"Section Range:  pages {start_p+1} to {end_p} (0-idx: {start_p} to {end_p})")
+        print(f"Found Markers:  {sorted(markers.keys())}")
+        for k in sorted(markers.keys()):
+            m = markers[k]
+            print(f"  Q{k:02d} -> Page {m['page']+1} (0-idx: {m['page']}) at y0={m['y0']:.1f}, x0={m['x0']:.1f} | text='{m['text']}'")
 
     qn_str = str(q.get('questionNumber', '1'))
     qn = int(qn_str) if qn_str.isdigit() else 1
-    print(f"Target Qnum:    {qn}")
+
     if qn not in markers:
-        print(f"[!] Target Q{qn} NOT in markers!")
+        if as_json:
+            print(json.dumps({"qid": qid, "targetQnum": qn, "inMarkers": False, "producedSlices": 0}, indent=2))
+        else:
+            print(f"Target Qnum:    {qn}")
+            print(f"[!] Target Q{qn} NOT in markers!")
         return False
 
     slices = gen.crop_solution_slices(doc, qn, markers, end_p)
+
+    ans = answers.get(qid)
+    if as_json:
+        data = {
+            "qid": qid,
+            "provenance": prov.get('display', 'Unknown'),
+            "isPromo": is_promo,
+            "paperNumber": paper_num,
+            "questionPaper": qp_fn,
+            "resolvedSol": sol_fn,
+            "targetQnum": qn,
+            "inMarkers": True,
+            "producedSlices": len(slices),
+            "slices": [{"width": s.width, "height": s.height} for s in slices],
+            "diagramUrl": ans.get('diagramUrl') if ans else None,
+        }
+        print(json.dumps(data, indent=2))
+        return True
+
+    print(f"Target Qnum:    {qn}")
     print(f"Produced:       {len(slices)} slice(s)")
     for s_idx, s in enumerate(slices, 1):
         print(f"  Slice {s_idx}: size {s.width}x{s.height}, mode {s.mode}")
 
-    ans = answers.get(qid)
     if ans:
         print(f"DB Answer ID:   {ans.get('id')}")
         print(f"DB diagramUrl:  {ans.get('diagramUrl')}")

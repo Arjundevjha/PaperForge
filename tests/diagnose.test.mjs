@@ -102,5 +102,53 @@ test('PaperForge Diagnostic Tooling (scripts/diagnose.py): Persistent Health & A
     encoding: 'utf-8',
   });
   assert.ok(sampleRaw.includes('ALL 5 SAMPLES PASSED'), 'Tandem pairing sample must pass 5/5');
+
+  // 6. EJC 2020 Prelim P1 Q2 & JPJC 2021 Promo Q6 Regression Invariants
+  const ejc20Raw = execSync('python3 scripts/diagnose.py --diagnose-answer ejc-2020-p1-q02 --json', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  });
+  const ejc20Diag = JSON.parse(ejc20Raw);
+  assert.strictEqual(ejc20Diag.targetQnum, 2, 'Target must be Q2');
+  assert.strictEqual(ejc20Diag.producedSlices, 1, 'Must produce 1 authentic solution slice');
+  assert.ok(ejc20Diag.slices[0].height >= 400, 'Answer slice must be full working (height >= 400px), not 77px tangent equation');
+
+  const jpjc21Raw = execSync('python3 scripts/diagnose.py --question jpjc-2021-p1-q06 --json', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  });
+  const jpjc21Questions = JSON.parse(jpjc21Raw);
+  const jpjc21Q6 = jpjc21Questions.find((q) => q.id === 'jpjc-2021-p1-q06');
+  assert.ok(jpjc21Q6, 'jpjc-2021-p1-q06 must exist');
+  assert.ok(!jpjc21Q6.textSnippet.includes('NYJC'), 'Corrupted NYJC text must be eliminated');
+  assert.ok(jpjc21Q6.textSnippet.includes('Cartesian equation of line L1'), 'Must have authentic JPJC 3D lines text');
+
+  // 7. Multi-line & Reverse Header Answer Key Invariants (DHS 2023 P2 Q4, RI 2024 Promo Q1, TMJC 2025 P2 Q1)
+  const dhs23Raw = execSync('python3 scripts/diagnose.py --diagnose-answer dhs-2023-p2-q04 --json', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  });
+  const dhs23Diag = JSON.parse(dhs23Raw);
+  assert.strictEqual(dhs23Diag.targetQnum, 4, 'Target must be Q4');
+  assert.ok(dhs23Diag.producedSlices >= 1, 'DHS 2023 P2 Q4 must produce at least 1 solution slice');
+  assert.ok(dhs23Diag.slices[0].height >= 500, 'DHS 2023 P2 Q4 slice must be full solution (height >= 500px)');
+
+  const ri24Raw = execSync('python3 scripts/diagnose.py --diagnose-answer ri-2024-p1-q01 --json', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  });
+  const ri24Diag = JSON.parse(ri24Raw);
+  assert.strictEqual(ri24Diag.targetQnum, 1, 'Target must be Q1');
+  assert.ok(ri24Diag.producedSlices >= 1, 'RI 2024 Promo Q1 must produce at least 1 solution slice');
+  assert.ok(ri24Diag.slices[0].height >= 500, 'RI 2024 Promo Q1 slice must be full solution (height >= 500px)');
+
+  const tmjc25Raw = execSync('python3 scripts/diagnose.py --diagnose-answer tmjc-2025-p2-q01 --json', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  });
+  const tmjc25Diag = JSON.parse(tmjc25Raw);
+  assert.strictEqual(tmjc25Diag.targetQnum, 1, 'Target must be Q1');
+  assert.ok(tmjc25Diag.producedSlices >= 1, 'TMJC 2025 P2 Q1 must produce at least 1 solution slice');
+  assert.ok(tmjc25Diag.slices[0].height >= 500, 'TMJC 2025 P2 Q1 slice must be full solution (height >= 500px)');
 });
 

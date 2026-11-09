@@ -99,7 +99,7 @@ const SUBTOPIC_SPECS: SubtopicSpec[] = [
     subtopic: 'Vectors in 2D and 3D',
     subtopicId: 'math-03-01',
     title: 'Vectors in 2D & 3D (Basic Operations, Dot & Cross Products)',
-    aliases: ['vectors in 2d and 3d', 'vectors', 'dot / scalar product', 'vector / cross product'],
+    aliases: ['vectors in 2d and 3d', 'vectors in 2d & 3d', 'vectors', 'dot / scalar product', 'vector / cross product'],
   },
   {
     wsId: 'ws_math_03_02_lines_planes',
@@ -109,7 +109,7 @@ const SUBTOPIC_SPECS: SubtopicSpec[] = [
     subtopic: 'Lines and Planes in 3D',
     subtopicId: 'math-03-04',
     title: 'Lines and Planes in 3D (Intersections & Distances)',
-    aliases: ['lines and planes in 3d', 'lines and planes'],
+    aliases: ['lines and planes in 3d', 'lines and planes in 3d (intersections & distances)', 'lines and planes'],
   },
 
   // Category 4: Complex Numbers
@@ -121,7 +121,7 @@ const SUBTOPIC_SPECS: SubtopicSpec[] = [
     subtopic: 'Cartesian Form & Operations',
     subtopicId: 'math-04-01',
     title: 'Cartesian, Polar & Exponential Forms',
-    aliases: ['cartesian form & operations', 'cartesian form', 'complex numbers'],
+    aliases: ['cartesian form & operations', 'cartesian form', 'complex numbers', 'cartesian, polar & exponential forms', 'cartesian'],
   },
   {
     wsId: 'ws_math_04_02_roots_polynomials',
@@ -131,7 +131,7 @@ const SUBTOPIC_SPECS: SubtopicSpec[] = [
     subtopic: 'Roots of Polynomials',
     subtopicId: 'math-04-02',
     title: 'Roots of Polynomials & De Moivre\'s Theorem',
-    aliases: ['roots of polynomials', 'polynomial roots'],
+    aliases: ['roots of polynomials', 'polynomial roots', 'roots of polynomials & de moivre\'s theorem', 'roots of polynomials and de moivre\'s theorem'],
   },
   {
     wsId: 'ws_math_04_03_argand_loci',
@@ -183,7 +183,7 @@ const SUBTOPIC_SPECS: SubtopicSpec[] = [
     subtopic: 'Maclaurin Series',
     subtopicId: 'math-05-03',
     title: 'Maclaurin Series & Expansions',
-    aliases: ['maclaurin series'],
+    aliases: ['maclaurin series', 'maclaurin series & expansions', 'maclaurin series and expansions'],
   },
 
   // Category 6: Probability and Statistics
@@ -225,7 +225,7 @@ const SUBTOPIC_SPECS: SubtopicSpec[] = [
     subtopic: 'Correlation and Linear Regression',
     subtopicId: 'math-06-06',
     title: 'Correlation & Linear Regression',
-    aliases: ['correlation and linear regression', 'linear regression'],
+    aliases: ['correlation and linear regression', 'correlation & linear regression', 'linear regression'],
   },
 ];
 

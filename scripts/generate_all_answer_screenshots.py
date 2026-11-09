@@ -29,6 +29,7 @@ SCHOOL_ALIASES = {
     'temasek': 'TJC', 'tjc': 'TJC',
     'catholic': 'CJC', 'cjc': 'CJC',
     'anderson': 'ASRJC', 'asrjc': 'ASRJC',
+    'ajc': 'AJC',
     'jurong': 'JPJC', 'jpjc': 'JPJC',
     'river valley': 'RVHS', 'rivervalley': 'RVHS', 'rvhs': 'RVHS',
     'st andrew': 'SAJC', 'sajc': 'SAJC',
@@ -117,7 +118,7 @@ def resolve_solution_file(qp_fn, paper_num=None):
             if len(d) > 8:
                 for page_idx in range(len(d) - 1, max(4, len(d) - 25), -1):
                     txt = d[page_idx].get_text('text').lower()
-                    if any(w in txt for w in ['suggested solution', 'marking scheme', 'mark scheme', 'solutions to', 'examiners report', 'markers report']):
+                    if any(w in txt for w in ['suggested solution', 'marking scheme', 'mark scheme', 'solutions to', 'examiners report', 'markers report', 'prelim exam(paper', 'exam(paper 1) solutions', 'paper 1) solutions', 'paper 2) solutions']):
                         return qp_fn
         except Exception:
             pass
@@ -257,7 +258,7 @@ def resolve_solution_file(qp_fn, paper_num=None):
 
     return None
 
-def find_solution_section_range(doc, paper_num=None):
+def find_solution_section_range(doc, paper_num=None, sol_fn=None):
     """
     Finds the (start_page, end_page) range in the solution PDF for the target paper number.
     Handles documents that bundle QP + Sol, or Paper 1 + Paper 2 solutions.
@@ -265,12 +266,21 @@ def find_solution_section_range(doc, paper_num=None):
     if len(doc) <= 4:
         return 0, len(doc)
 
+    if sol_fn:
+        fn_lower = sol_fn.lower()
+        if paper_num == 2 and any(p in fn_lower for p in ['_p2', 'paper_2', 'paper 2', 'p2_']) and not any(p in fn_lower for p in ['_p1', 'paper_1', 'paper 1', 'p1_']):
+            return 0, len(doc)
+        if paper_num == 1 and any(p in fn_lower for p in ['_p1', 'paper_1', 'paper 1', 'p1_']) and not any(p in fn_lower for p in ['_p2', 'paper_2', 'paper 2', 'p2_']):
+            return 0, len(doc)
+        if 'promo' in fn_lower:
+            return 0, len(doc)
+
     p1_start = None
     p2_start = None
 
     for p in range(len(doc)):
         txt = doc[p].get_text('text').lower()
-        if any(w in txt for w in ['solution', 'marking scheme', 'mark scheme', 'suggested answer', 'markers\' report', 'markers’ report']):
+        if any(w in txt for w in ['solution', 'marking scheme', 'mark scheme', 'suggested answer', 'markers\' report', 'markers’ report', 'prelim exam(paper']):
             is_p1 = bool(re.search(r'(?:^|[^a-z0-9])(?:p|paper)[ _]?1(?:[^a-z0-9]|$)', txt))
             is_p2 = bool(re.search(r'(?:^|[^a-z0-9])(?:p|paper)[ _]?2(?:[^a-z0-9]|$)', txt))
             if is_p1 and p1_start is None:
@@ -280,14 +290,20 @@ def find_solution_section_range(doc, paper_num=None):
 
     if paper_num == 2 and p2_start is not None:
         return p2_start, len(doc)
-    if paper_num == 1 and p1_start is not None:
+    if (paper_num == 1 or paper_num is None) and p1_start is not None:
         end_p = p2_start if p2_start is not None and p2_start > p1_start else len(doc)
         return p1_start, end_p
+
+    # If page 0 already contains Q1 or Question 1 and not targeting paper 2
+    if paper_num != 2 and len(doc) > 0:
+        p0_txt = doc[0].get_text('text').lower()
+        if re.search(r'\b(?:q(?:uestion|n)?\.?\s*1\b|1\s*[\.\:\)\(a-d])', p0_txt):
+            return 0, len(doc)
 
     # If general solutions start is found
     for p in range(len(doc)):
         txt = doc[p].get_text('text').lower()
-        if any(w in txt for w in ['solution', 'marking scheme', 'mark scheme', 'suggested answer']):
+        if any(w in txt for w in ['solution', 'marking scheme', 'mark scheme', 'suggested answer', 'prelim exam(paper']):
             return p, len(doc)
 
     return 0, len(doc)
@@ -306,7 +322,21 @@ SCANNED_PAPER_MARKERS = {
         10: {'page': 4, 'qnum': 10, 'y0': 75.0, 'y1': 85.0, 'x0': 56.0, 'text': '10', 'explicit': True},
         11: {'page': 4, 'qnum': 11, 'y0': 650.0, 'y1': 660.0, 'x0': 56.0, 'text': '11', 'explicit': True},
         12: {'page': 6, 'qnum': 12, 'y0': 75.0, 'y1': 85.0, 'x0': 56.0, 'text': '12', 'explicit': True},
-    }
+    },
+    'EJC_H2_2020_Prelim_P1_Solution_6785.pdf': {
+        1: {'page': 0, 'qnum': 1, 'y0': 44.0, 'y1': 55.0, 'x0': 65.0, 'text': '1', 'explicit': True},
+        2: {'page': 1, 'qnum': 2, 'y0': 55.0, 'y1': 65.0, 'x0': 103.0, 'text': '2', 'explicit': True},
+        3: {'page': 1, 'qnum': 3, 'y0': 265.0, 'y1': 275.0, 'x0': 60.0, 'text': '3', 'explicit': True},
+        4: {'page': 2, 'qnum': 4, 'y0': 71.0, 'y1': 81.0, 'x0': 103.0, 'text': '4', 'explicit': True},
+        5: {'page': 2, 'qnum': 5, 'y0': 414.0, 'y1': 424.0, 'x0': 108.0, 'text': '5', 'explicit': True},
+        6: {'page': 3, 'qnum': 6, 'y0': 240.0, 'y1': 250.0, 'x0': 103.0, 'text': '6', 'explicit': True},
+        7: {'page': 5, 'qnum': 7, 'y0': 70.0, 'y1': 80.0, 'x0': 127.0, 'text': '7', 'explicit': True},
+        8: {'page': 6, 'qnum': 8, 'y0': 70.0, 'y1': 80.0, 'x0': 111.0, 'text': '8', 'explicit': True},
+        9: {'page': 8, 'qnum': 9, 'y0': 218.0, 'y1': 228.0, 'x0': 77.0, 'text': '9', 'explicit': True},
+        10: {'page': 9, 'qnum': 10, 'y0': 134.0, 'y1': 144.0, 'x0': 60.0, 'text': '10', 'explicit': True},
+        11: {'page': 11, 'qnum': 11, 'y0': 57.0, 'y1': 67.0, 'x0': 110.0, 'text': '11', 'explicit': True},
+        12: {'page': 12, 'qnum': 12, 'y0': 70.0, 'y1': 80.0, 'x0': 118.0, 'text': '12', 'explicit': True},
+    },
 }
 
 def find_solution_markers(doc, start_p=0, end_p=None, sol_fn=None):
@@ -325,6 +355,7 @@ def find_solution_markers(doc, start_p=0, end_p=None, sol_fn=None):
     for p_idx in range(start_p, end_p):
         page = doc[p_idx]
         blocks = page.get_text('dict').get('blocks', [])
+        page_lines = []
         for b in blocks:
             if 'lines' not in b:
                 continue
@@ -338,25 +369,36 @@ def find_solution_markers(doc, start_p=0, end_p=None, sol_fn=None):
                     continue
                 if re.search(r'\b(?:page|\d+\s+of|turn\s+over|www\.)\b', text, re.I):
                     continue
+                page_lines.append((text, l['bbox']))
 
-                m_explicit = re.match(r'^(?:Suggested\s+)?(?:Question|Qn|Q|Soln|Solution|Answer|Marking\s+Scheme)(?:\s+(?:to|for))?\s*(?:Question|Qn|Q)?\s*([1-9]|1[0-5])(?:[a-d]|i{1,4}|iv|v)?(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
-                m_bare = re.match(r'^([1-9]|1[0-5])(?:[a-d]|i{1,4}|iv|v)?(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
+        for i, (text, bbox) in enumerate(page_lines):
+            y0, y1 = bbox[1], bbox[3]
+            x0, x1 = bbox[0], bbox[2]
 
-                is_explicit = bool(m_explicit)
-                m = m_explicit or m_bare
-                if m:
-                    qnum = int(m.group(1))
-                    if text.startswith('[') or any(k in text.lower() for k in ['mark', 'ln', 'cos', 'sin', 'tan', 'sec']):
-                        continue
-                    candidates.append({
-                        'page': p_idx,
-                        'qnum': qnum,
-                        'y0': y0,
-                        'y1': y1,
-                        'x0': x0,
-                        'text': text,
-                        'explicit': is_explicit,
-                    })
+            m_explicit_a = re.match(r'^(?:Suggested\s+)?(?:Question|Qn|Q|Soln|Solution|Answer|Marking\s+Scheme)(?:\s+(?:to|for))?\s*(?:Question|Qn|Q)?\s*([1-9]|1[0-5])(?:[a-d]|i{1,4}|iv|v)?(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
+            m_explicit_b = re.match(r'^([1-9]|1[0-5])\s*[\.\:\)\-\]]?\s*(?:Suggested\s+)?(?:Solution|Soln|Answer|Marking\s+Scheme)\b', text, re.I)
+            m_bare = re.match(r'^([1-9]|1[0-5])(?:[a-d]|i{1,4}|iv|v)?(?:[\.\:\)\(\]]|\s+|$)', text, re.I)
+
+            is_explicit = bool(m_explicit_a or m_explicit_b)
+            if not is_explicit and m_bare and i + 1 < len(page_lines):
+                next_t = page_lines[i + 1][0]
+                if re.match(r'^(?:Suggested\s+)?(?:Solution|Soln|Answer|Marking\s+Scheme)\b', next_t, re.I):
+                    is_explicit = True
+
+            m = m_explicit_a or m_explicit_b or m_bare
+            if m:
+                qnum = int(m.group(1))
+                if text.startswith('[') or any(k in text.lower() for k in ['mark', 'ln', 'cos', 'sin', 'tan', 'sec']):
+                    continue
+                candidates.append({
+                    'page': p_idx,
+                    'qnum': qnum,
+                    'y0': y0,
+                    'y1': y1,
+                    'x0': x0,
+                    'text': text,
+                    'explicit': is_explicit,
+                })
 
     if not candidates:
         return {}
@@ -371,7 +413,7 @@ def find_solution_markers(doc, start_p=0, end_p=None, sol_fn=None):
     for c in candidates:
         if c['explicit']:
             clean_candidates.append(c)
-        elif c['x0'] <= target_margin_x0 + 15:
+        elif c['x0'] <= max(target_margin_x0 + 35, 75.0):
             clean_candidates.append(c)
 
     markers_by_q = {}
@@ -448,7 +490,7 @@ def crop_solution_slices(doc, qnum, markers, max_p=None):
         pix = page.get_pixmap(clip=rect, dpi=200, colorspace=fitz.csGRAY)
         img = Image.frombytes('L', [pix.width, pix.height], pix.samples)
         trimmed = trim_whitespace(img, padding=24)
-        if trimmed and trimmed.width > 30 and trimmed.height > 30:
+        if trimmed and trimmed.width > 80 and trimmed.height > 60:
             slices.append(trimmed)
 
     return slices
@@ -528,7 +570,7 @@ def main():
                 if sol_fn not in doc_cache:
                     doc_cache[sol_fn] = fitz.open(sol_path)
                 doc = doc_cache[sol_fn]
-                start_p, end_p = find_solution_section_range(doc, paper_num)
+                start_p, end_p = find_solution_section_range(doc, paper_num, sol_fn=sol_fn)
                 markers = find_solution_markers(doc, start_p, end_p, sol_fn=sol_fn)
                 markers_cache[cache_key] = (markers, end_p)
             except Exception as e:
