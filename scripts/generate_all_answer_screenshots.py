@@ -93,9 +93,24 @@ def extract_meta(fn):
 
     return {'sch': sch, 'yr': yr, 'p': p, 'typ': typ, 'num': num, 'fn': fn}
 
+KNOWN_TWIN_SOLUTIONS = {
+    '2012_NYJC_H2_Math_Prelim_P2_Question_6705.pdf': '2012_NYJC_H2_Math_Prelim_P2_solutions20081_documentsRI(JC)_H2_Maths_Promo_2008_6706.pdf',
+    'EJC_9758_2023_Prelim_P2_12787.pdf': 'EJC_9758_2023_Prelim_P2_Solution_10089.pdf',
+    'CJC_9758_2023_Prelim_P1_10641.pdf': 'CJC_9758_2023_Prelim_P1_Solutions_10159.pdf',
+    'RI_9758_01_Prelim_2023_9749.pdf': 'RI_9758_2023_Prelim_P1_Solution_10103.pdf',
+    'RVHS_P1_6653.pdf': 'RVHS_P1_MS_6650.pdf',
+    'RVHS_P2_6652.pdf': 'RVHS_P2_MS_6649.pdf',
+    '2025_EJC_Promo_(Qn)2024199_documents2024_ASRJC_JC1_H2_Math_Promo_Exam_Questions_22595.pdf': '2025_EJC_Promo_(Soln)_22594.pdf',
+}
+
 def resolve_solution_file(qp_fn, paper_num=None):
     if not qp_fn:
         return None
+
+    if qp_fn in KNOWN_TWIN_SOLUTIONS:
+        cand = KNOWN_TWIN_SOLUTIONS[qp_fn]
+        if os.path.exists(os.path.join(PAPERS_DIR, cand)):
+            return cand
 
     qp_meta = extract_meta(qp_fn)
     if paper_num and not qp_meta['p']:
@@ -112,13 +127,13 @@ def resolve_solution_file(qp_fn, paper_num=None):
             pass
 
     # 1. Check if qp_fn itself explicitly contains solutions (must have explicit markers and not be a pure QP)
-    if os.path.exists(qp_path) and not any(k in qp_fn.lower() for k in ['_qp_', '_questions_', '_qns_', '_question_paper_']):
+    if os.path.exists(qp_path) and not any(k in qp_fn.lower() for k in ['_qp_', '_questions_', '_qns_', '_question_paper_', 'qn_paper']):
         try:
             d = fitz.open(qp_path)
             if len(d) > 8:
-                for page_idx in range(len(d) - 1, max(4, len(d) - 25), -1):
+                for page_idx in range(5, len(d)):
                     txt = d[page_idx].get_text('text').lower()
-                    if any(w in txt for w in ['suggested solution', 'marking scheme', 'mark scheme', 'solutions to', 'examiners report', 'markers report', 'prelim exam(paper', 'exam(paper 1) solutions', 'paper 1) solutions', 'paper 2) solutions']):
+                    if any(w in txt for w in ['suggested solution', 'marking scheme', 'mark scheme', 'solutions to', 'q solutions', 'examiners report', 'markers report', 'prelim exam(paper', 'exam(paper 1) solutions', 'paper 1) solutions', 'paper 2) solutions', 'paper 1 solutions', 'paper 2 solutions', 'solutions']):
                         return qp_fn
         except Exception:
             pass
@@ -154,8 +169,13 @@ def resolve_solution_file(qp_fn, paper_num=None):
         if cand == qp_fn:
             continue
         cand_lower = cand.lower()
+        # Pure question papers can NEVER be candidates for a solution file
+        if any(k in cand_lower for k in ['_qp_', '_questions_', '_qns_', '_question_paper_', 'qn_paper', '_qp.', '_qn.']):
+            continue
+
         c_meta = extract_meta(cand)
-        has_sol_keyword = any(k in cand_lower for k in ['sol', 'ans', 'ms', 'mark', 'report'])
+        # Use boundary-safe solution keyword search so 'ms' in 'prelims' does not trigger false positive
+        has_sol_keyword = bool(re.search(r'(?:^|[^a-z0-9])(?:sol|soln|solutions?|ans|answers?|ms|marking|report)(?:[^a-z0-9]|$)', cand_lower))
         
         # If filename doesn't have 'sol' but has an adjacent upload ID (diff <= 3), verify if doc has solutions
         if not has_sol_keyword:
@@ -388,8 +408,11 @@ def find_solution_markers(doc, start_p=0, end_p=None, sol_fn=None):
             m = m_explicit_a or m_explicit_b or m_bare
             if m:
                 qnum = int(m.group(1))
-                if text.startswith('[') or any(k in text.lower() for k in ['mark', 'ln', 'cos', 'sin', 'tan', 'sec']):
-                    continue
+                if not is_explicit:
+                    if text.startswith('[') or re.match(r'^\s*\d+\s*(?:sin|cos|tan|sec|csc|cot|ln|log)\b', text, re.I):
+                        continue
+                    if re.search(r'\[\s*\d+\s*marks?\s*\]', text, re.I) and not re.search(r'^\s*([1-9]|1[0-5])\s*[\.\:]', text):
+                        continue
                 candidates.append({
                     'page': p_idx,
                     'qnum': qnum,
