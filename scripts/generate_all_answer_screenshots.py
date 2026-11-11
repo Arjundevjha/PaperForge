@@ -101,6 +101,8 @@ KNOWN_TWIN_SOLUTIONS = {
     'RVHS_P1_6653.pdf': 'RVHS_P1_MS_6650.pdf',
     'RVHS_P2_6652.pdf': 'RVHS_P2_MS_6649.pdf',
     '2025_EJC_Promo_(Qn)2024199_documents2024_ASRJC_JC1_H2_Math_Promo_Exam_Questions_22595.pdf': '2025_EJC_Promo_(Soln)_22594.pdf',
+    'RI_Post+Prelim+Revision+P1_Qns_19707.pdf': 'RI_Post+Prelim+Revision+P1_28LT1_29_Solutions_19710.pdf',
+    '2024_DHS_Y5_H2_Math_Promo_Practice_Paper_2_(QP)_12912.pdf': '2024_DHS_Y5_H2_Math_Promo_Practice_Paper_2_Suggested_Solutions_12914.pdf',
 }
 
 def resolve_solution_file(qp_fn, paper_num=None):
@@ -224,7 +226,7 @@ def resolve_solution_file(qp_fn, paper_num=None):
 
         # If candidate has no year in filename:
         if qp_meta['yr'] and not c_meta['yr']:
-            is_adjacent = bool(qp_meta['num'] and c_meta['num'] and abs(qp_meta['num'] - c_meta['num']) <= 2)
+            is_adjacent = bool(qp_meta['num'] and c_meta['num'] and abs(qp_meta['num'] - c_meta['num']) <= 5)
             if not is_adjacent:
                 try:
                     c_doc = fitz.open(os.path.join(PAPERS_DIR, cand))
@@ -240,7 +242,7 @@ def resolve_solution_file(qp_fn, paper_num=None):
 
         # Invariant 3: Paper (P1 vs P2) MUST match if candidate specifies a single paper.
         # If candidate does NOT specify P1 or P2 in filename, it may be a bundled solution book.
-        if not is_promo_qp and qp_meta['p'] and c_meta['p'] and qp_meta['p'] != c_meta['p']:
+        if qp_meta['p'] and c_meta['p'] and qp_meta['p'] != c_meta['p']:
             continue
 
         score = 0
@@ -356,6 +358,35 @@ SCANNED_PAPER_MARKERS = {
         10: {'page': 9, 'qnum': 10, 'y0': 134.0, 'y1': 144.0, 'x0': 60.0, 'text': '10', 'explicit': True},
         11: {'page': 11, 'qnum': 11, 'y0': 57.0, 'y1': 67.0, 'x0': 110.0, 'text': '11', 'explicit': True},
         12: {'page': 12, 'qnum': 12, 'y0': 70.0, 'y1': 80.0, 'x0': 118.0, 'text': '12', 'explicit': True},
+    },
+    'RI_Post+Prelim+Revision+P1_28LT1_29_Solutions_19710.pdf': {
+        1: {'page': 0, 'qnum': 1, 'y0': 260.0, 'y1': 275.0, 'x0': 58.6, 'text': 'Solution: 1(i)', 'explicit': True},
+        2: {'page': 1, 'qnum': 2, 'y0': 405.0, 'y1': 420.0, 'x0': 58.6, 'text': 'Solution: 2', 'explicit': True},
+        3: {'page': 2, 'qnum': 3, 'y0': 195.0, 'y1': 210.0, 'x0': 58.6, 'text': 'Solution: 3', 'explicit': True},
+        4: {'page': 3, 'qnum': 4, 'y0': 560.0, 'y1': 575.0, 'x0': 58.6, 'text': 'Solution: 4', 'explicit': True},
+        5: {'page': 5, 'qnum': 5, 'y0': 420.0, 'y1': 435.0, 'x0': 58.6, 'text': 'Solution: 5', 'explicit': True},
+        6: {'page': 6, 'qnum': 6, 'y0': 350.0, 'y1': 365.0, 'x0': 58.6, 'text': 'Solution: 6', 'explicit': True},
+        7: {'page': 7, 'qnum': 7, 'y0': 465.0, 'y1': 480.0, 'x0': 58.6, 'text': 'Solution: 7(a)', 'explicit': True},
+        8: {'page': 9, 'qnum': 8, 'y0': 75.0, 'y1': 90.0, 'x0': 58.6, 'text': 'Solution: 8', 'explicit': True},
+        9: {'page': 11, 'qnum': 9, 'y0': 75.0, 'y1': 90.0, 'x0': 58.6, 'text': 'Solution: 9', 'explicit': True},
+        10: {'page': 13, 'qnum': 10, 'y0': 75.0, 'y1': 90.0, 'x0': 58.6, 'text': 'Solution: 10', 'explicit': True},
+        11: {'page': 16, 'qnum': 11, 'y0': 75.0, 'y1': 90.0, 'x0': 58.6, 'text': 'Solution: 11', 'explicit': True},
+        12: {'page': 20, 'qnum': 12, 'y0': 75.0, 'y1': 90.0, 'x0': 58.6, 'text': 'Solution: 12', 'explicit': True},
+    },
+    '2024_DHS_Y5_H2_Math_Promo_Practice_Paper_2_Suggested_Solutions_12914.pdf': {
+        1: {'page': 0, 'qnum': 1, 'y0': 121.7, 'y1': 135.0, 'x0': 109.0, 'text': '1', 'explicit': True},
+        2: {'page': 0, 'qnum': 2, 'y0': 313.2, 'y1': 325.0, 'x0': 109.0, 'text': '2', 'explicit': True},
+        3: {'page': 1, 'qnum': 3, 'y0': 87.2, 'y1': 100.0, 'x0': 109.0, 'text': '3(a)', 'explicit': True},
+        4: {'page': 1, 'qnum': 4, 'y0': 478.3, 'y1': 490.0, 'x0': 109.0, 'text': '4(a)', 'explicit': True},
+        5: {'page': 2, 'qnum': 5, 'y0': 256.6, 'y1': 270.0, 'x0': 109.0, 'text': '5(a)', 'explicit': True},
+        6: {'page': 3, 'qnum': 6, 'y0': 305.8, 'y1': 320.0, 'x0': 109.0, 'text': '6(a)', 'explicit': True},
+        7: {'page': 4, 'qnum': 7, 'y0': 101.0, 'y1': 115.0, 'x0': 109.0, 'text': '7(a)(i)', 'explicit': True},
+        8: {'page': 5, 'qnum': 8, 'y0': 87.2, 'y1': 100.0, 'x0': 109.0, 'text': '8a(i)', 'explicit': True},
+        9: {'page': 6, 'qnum': 9, 'y0': 273.5, 'y1': 285.0, 'x0': 109.0, 'text': '9(a)', 'explicit': True},
+        10: {'page': 7, 'qnum': 10, 'y0': 255.7, 'y1': 270.0, 'x0': 109.0, 'text': '10(a)', 'explicit': True},
+        11: {'page': 8, 'qnum': 11, 'y0': 460.1, 'y1': 475.0, 'x0': 109.0, 'text': '11(a)', 'explicit': True},
+        12: {'page': 10, 'qnum': 12, 'y0': 90.0, 'y1': 110.0, 'x0': 109.0, 'text': '12(a)', 'explicit': True},
+        13: {'page': 12, 'qnum': 13, 'y0': 75.0, 'y1': 95.0, 'x0': 109.0, 'text': '13(a)', 'explicit': True},
     },
 }
 
@@ -495,6 +526,9 @@ def crop_solution_slices(doc, qnum, markers, max_p=None):
 
     # Limit solution to at most 3 pages
     end_p = next_m['page'] if next_m else min(max_p - 1, start_p + 2)
+    # If the next question marker starts right near top of its page (e.g. y0 <= 120), current solution ended on previous page
+    if next_m and next_m['page'] > start_p and next_m['y0'] <= 120:
+        end_p = next_m['page'] - 1
     if end_p - start_p > 2:
         end_p = start_p + 2
 
