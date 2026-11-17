@@ -140,6 +140,21 @@ export interface QuestionProvenance {
 
 export type QuestionStatus = 'DRAFT' | 'READY' | 'PUBLISHED' | 'FLAGGED' | 'EXCLUDED';
 
+export type QuestionType =
+  | 'structured'
+  | 'proof'
+  | 'graph_sketch'
+  | 'application'
+  | 'calculation'
+  | 'statistical_test'
+  | 'counting_probability';
+
+export type AnswerVerificationStatus =
+  | 'VERIFIED'
+  | 'AUTO_MATCHED'
+  | 'MISMATCH_FLAGGED'
+  | 'MISSING';
+
 export interface Question {
   id: string;
   sourceId: string;
@@ -147,7 +162,10 @@ export interface Question {
   parentQuestionId?: string | null;
   subject: SubjectId;
   chapter: string;
+  topicId?: string | null;
   subtopic?: string | null;
+  subtopicId?: string | null;
+  questionType?: QuestionType;
   syllabusVersionId: string;
   textContent: string;
   marks?: number | null;
@@ -174,13 +192,19 @@ export interface Answer {
   sourceId: string;
   questionId: string;
   questionNumber: string;
+  questionType?: QuestionType;
+  topicId?: string | null;
+  subtopicId?: string | null;
+  solutionSourceId?: string | null;
+  solutionSourceFilename?: string | null;
   answerContent: string;
   answerHash: string;
   markSchemeNotes?: string;
   diagramUrl?: string;
   regions?: AnswerRegion[];
   provenance: QuestionProvenance;
-  status: 'VERIFIED' | 'NEEDS_REVIEW' | 'AUTO_MATCHED';
+  verificationStatus?: AnswerVerificationStatus;
+  status: AnswerVerificationStatus | 'NEEDS_REVIEW';
 }
 
 export interface WorksheetManifest {

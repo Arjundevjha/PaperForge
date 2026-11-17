@@ -11,7 +11,17 @@ const SUPABASE_CDN_BASE = SUPABASE_URL
   ? `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}`
   : '';
 
-export function getQuestionImageUrl(qid: string): string {
+export function getQuestionImageUrl(qid: string, customDiagramUrl?: string): string {
+  if (customDiagramUrl) {
+    if (customDiagramUrl.startsWith('http://') || customDiagramUrl.startsWith('https://')) {
+      return customDiagramUrl;
+    }
+    if (SUPABASE_CDN_BASE) {
+      const cleanPath = customDiagramUrl.startsWith('/') ? customDiagramUrl : `/${customDiagramUrl}`;
+      return `${SUPABASE_CDN_BASE}${cleanPath}`;
+    }
+    return customDiagramUrl;
+  }
   if (SUPABASE_CDN_BASE) {
     return `${SUPABASE_CDN_BASE}/questions/${qid}.png`;
   }
@@ -19,8 +29,18 @@ export function getQuestionImageUrl(qid: string): string {
 }
 
 export function getAnswerImageUrl(qid: string, customDiagramUrl?: string): string {
+  if (customDiagramUrl) {
+    if (customDiagramUrl.startsWith('http://') || customDiagramUrl.startsWith('https://')) {
+      return customDiagramUrl;
+    }
+    if (SUPABASE_CDN_BASE) {
+      const cleanPath = customDiagramUrl.startsWith('/') ? customDiagramUrl : `/${customDiagramUrl}`;
+      return `${SUPABASE_CDN_BASE}${cleanPath}`;
+    }
+    return customDiagramUrl;
+  }
   if (SUPABASE_CDN_BASE) {
     return `${SUPABASE_CDN_BASE}/answers/${qid}.png`;
   }
-  return customDiagramUrl || `/answers/${qid}.png`;
+  return `/answers/${qid}.png`;
 }

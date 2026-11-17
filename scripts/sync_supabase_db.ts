@@ -91,12 +91,16 @@ async function main() {
     parent_question_id: q.parentQuestionId || null,
     subject: q.subject || 'mathematics',
     chapter: cleanText(q.chapter) || 'Promotional Exam Revision',
+    topic_id: q.topicId || null,
     subtopic: cleanText(q.subtopic) || null,
+    subtopic_id: q.subtopicId || null,
+    question_type: q.questionType || null,
     syllabus_version_id: q.syllabusVersionId || 'SEAB-9758',
     text_content: cleanText(q.textContent) || '',
     marks: q.marks || 4,
     text_hash: q.textHash || 'hash',
     visual_hash: q.visualHash || null,
+    diagram_url: q.diagramUrl || null,
     status: q.status || 'READY',
     created_at: q.createdAt || new Date().toISOString(),
     updated_at: q.updatedAt || new Date().toISOString(),
@@ -118,10 +122,17 @@ async function main() {
     source_id: a.sourceId,
     question_id: a.questionId,
     question_number: a.questionNumber,
+    question_type: a.questionType || null,
+    topic_id: a.topicId || null,
+    subtopic_id: a.subtopicId || null,
+    diagram_url: a.diagramUrl || null,
+    solution_source_id: a.solutionSourceId || null,
+    solution_source_filename: cleanText(a.solutionSourceFilename) || null,
     answer_content: cleanText(a.answerContent) || '',
     answer_hash: a.answerHash || 'anshash',
     mark_scheme_notes: cleanText(a.markSchemeNotes) || null,
-    status: a.status || 'AUTO_MATCHED',
+    verification_status: a.verificationStatus || 'AUTO_MATCHED',
+    status: a.verificationStatus || a.status || 'AUTO_MATCHED',
   }));
 
   for (let i = 0; i < answerRows.length; i += 100) {
@@ -147,6 +158,9 @@ async function main() {
     title: w.title,
     subject: w.subject || 'mathematics',
     chapter: w.chapter || 'All Chapters',
+    subtopic: cleanText(w.subtopic) || null,
+    subtopic_id: w.subtopicId || null,
+    category_id: w.categoryId || null,
     syllabus_version_id: w.syllabusVersionId || 'SEAB-9758-Official',
     version: w.version || 1,
     question_count: w.questionCount || w.manifest?.questions?.length || 10,
@@ -157,7 +171,13 @@ async function main() {
     updated_at: w.updatedAt || new Date().toISOString(),
   }));
 
-  const { error: wsErr } = await supabase.from('worksheets').upsert(worksheetRows, { onConflict: 'id' });
+  let { error: wsErr } = await supabase.from('worksheets').upsert(worksheetRows, { onConflict: 'id' });
+  if (wsErr && wsErr.message.includes('schema cache')) {
+    console.warn(`  [!] worksheets schema lacks subtopic/category_id columns (${wsErr.message}); retrying with base columns...`);
+    const baseWorksheetRows = worksheetRows.map(({ subtopic, subtopic_id, category_id, ...rest }: any) => rest);
+    const retry = await supabase.from('worksheets').upsert(baseWorksheetRows, { onConflict: 'id' });
+    wsErr = retry.error;
+  }
   if (wsErr) {
     console.error('Error upserting worksheets:', wsErr.message);
   } else {

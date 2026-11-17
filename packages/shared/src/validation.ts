@@ -74,10 +74,30 @@ export const ReviewResolutionPayloadSchema = z
     message: 'Either id or reviewItemId must be provided',
   });
 
+export const QuestionTypeSchema = z.enum([
+  'structured',
+  'proof',
+  'graph_sketch',
+  'application',
+  'calculation',
+  'statistical_test',
+  'counting_probability',
+]);
+
+export const AnswerVerificationStatusSchema = z.enum([
+  'VERIFIED',
+  'AUTO_MATCHED',
+  'MISMATCH_FLAGGED',
+  'MISSING',
+]);
+
 export const QuestionReclassifyPayloadSchema = z.object({
   questionId: z.string().min(1),
   chapter: z.string().min(1),
+  topicId: z.string().optional().nullable(),
   subtopic: z.string().optional().nullable(),
+  subtopicId: z.string().optional().nullable(),
+  questionType: QuestionTypeSchema.optional(),
   status: z.enum(['DRAFT', 'READY', 'PUBLISHED', 'FLAGGED', 'EXCLUDED']).optional(),
   notes: z.string().optional(),
 });

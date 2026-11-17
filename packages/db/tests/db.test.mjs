@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { PaperForgeDataStore } from '../src/store.ts';
+import { QuestionReclassifyPayloadSchema } from '../../shared/src/validation.ts';
 
 test('PaperForgeDataStore loads seed data with valid provenance and answers', () => {
   const store = new PaperForgeDataStore();
@@ -119,5 +120,38 @@ test('PaperForgeDataStore updates question and moves between worksheets', () => 
     assert.ok(!ws1.manifest.questions.includes(q.id));
     assert.ok(ws2.manifest.questions.includes(q.id));
   }
+});
+
+test('PaperForgeDataStore and QuestionReclassifyPayloadSchema support questionType, topicId, subtopicId, and answer provenance', () => {
+  const store = new PaperForgeDataStore();
+  const q = store.listQuestions()[0];
+  assert.ok(q);
+
+  const parsed = QuestionReclassifyPayloadSchema.parse({
+    questionId: q.id,
+    chapter: 'Probability and Statistics',
+    topicId: 'math-06',
+    subtopic: 'Probability & P&C',
+    subtopicId: 'math-06-01',
+    questionType: 'counting_probability',
+  });
+  assert.strictEqual(parsed.questionType, 'counting_probability');
+
+  const updated = store.updateQuestion(q.id, {
+    topicId: parsed.topicId,
+    subtopicId: parsed.subtopicId,
+    questionType: parsed.questionType,
+  });
+  assert.ok(updated);
+  assert.strictEqual(updated.questionType, 'counting_probability');
+  assert.strictEqual(updated.topicId, 'math-06');
+  assert.strictEqual(updated.subtopicId, 'math-06-01');
+
+  const ans = store.getAnswerByQuestionId(q.id);
+  assert.ok(ans);
+  ans.solutionSourceId = 'src_njc_2012_p2_sol';
+  ans.solutionSourceFilename = 'NJC_JC2_H2_Maths_2012_Solutions_Paper_2_6655.pdf';
+  ans.verificationStatus = 'VERIFIED';
+  assert.strictEqual(store.getAnswerByQuestionId(q.id)?.verificationStatus, 'VERIFIED');
 });
 

@@ -10,13 +10,10 @@ import {
   CheckSquare,
   FileArchive,
   BookOpen,
-  Search,
-  CheckCircle2,
   ChevronDown,
   UserCheck,
   Sparkles,
   LogOut,
-  User,
 } from 'lucide-react';
 import { SubjectId, SUBJECT_METADATA } from '@paperforge/shared';
 import { useAuth } from '../auth/AuthProvider';
@@ -37,8 +34,6 @@ export const AppShell: React.FC<AppShellProps> = ({
   const { user, role, isAdmin, signOut, isLoading } = useAuth();
   const [subjectMenuOpen, setSubjectMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [pendingReviewCount, setPendingReviewCount] = useState<number>(0);
 
   // Enforce authentication redirect
@@ -65,15 +60,12 @@ export const AppShell: React.FC<AppShellProps> = ({
     fetchPendingReviews();
   }, [pathname, isAdmin]);
 
-  // Global Keyboard Shortcuts (Ctrl+K / Cmd+K and Escape)
+  // Global Keyboard Shortcuts (Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setSearchOpen((prev) => !prev);
-      } else if (e.key === 'Escape') {
-        setSearchOpen(false);
+      if (e.key === 'Escape') {
         setSubjectMenuOpen(false);
+        setUserMenuOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -250,28 +242,11 @@ export const AppShell: React.FC<AppShellProps> = ({
                 </div>
               )}
             </div>
-
-            {/* Global Search Bar */}
-            <div className="relative">
-              <button
-                onClick={() => setSearchOpen(true)}
-                aria-label="Open global search (Ctrl+K)"
-                className="flex items-center gap-2 px-3 py-1.5 rounded bg-surface-2/60 border border-border-subdued hover:border-border-active text-xs text-[#94a3b8] hover:text-[#dee2f1] w-64 text-left transition-colors"
-              >
-                <Search size={14} />
-                <span>Search 16 JCs, topics... (Ctrl+K)</span>
-              </button>
-            </div>
           </div>
 
-          {/* Right Header Status Indicators */}
+          {/* Right Header Account Menu */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0b1b1c] border border-primary-cyan/30 text-primary-cyan text-[11px] font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary-cyan animate-pulse" />
-              <span>Sync: 18 Sep 2026 • Operational</span>
-            </div>
-
-            <div className="relative pl-2 border-l border-border-subdued">
+            <div className="relative pl-2">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 aria-haspopup="true"
@@ -332,54 +307,6 @@ export const AppShell: React.FC<AppShellProps> = ({
           {children}
         </main>
       </div>
-
-      {/* Search Modal */}
-      {searchOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Quick Search"
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        >
-          <div className="w-full max-w-xl bg-surface-2 border border-border-active rounded-lg shadow-2xl p-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-border-subdued">
-              <Search size={18} className="text-primary-cyan" />
-              <input
-                type="text"
-                autoFocus
-                aria-label="Search questions, chapters, or Junior Colleges"
-                placeholder="Search by keyword, JC (e.g. RI, HCI, NYJC), chapter, or question code..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-transparent text-sm text-[#f1f5f9] focus:outline-none"
-              />
-              <button
-                onClick={() => setSearchOpen(false)}
-                aria-label="Close search modal"
-                className="text-xs px-2 py-1 bg-surface-1 border border-border-subdued rounded text-[#94a3b8] hover:text-white"
-              >
-                ESC
-              </button>
-            </div>
-            <div className="py-4 text-xs text-[#94a3b8] space-y-2">
-              <p className="font-mono text-[10px] uppercase text-[#94a3b8]">Quick Suggestions</p>
-              <div className="flex flex-wrap gap-1.5">
-                {['[RI 2025 H2 Chemistry]', '2,4-DNPH precipitate', 'Centripetal acceleration', 'Volume of revolution', 'Enzyme kinetics Km'].map(
-                  (sug) => (
-                    <button
-                      key={sug}
-                      onClick={() => setSearchQuery(sug)}
-                      className="px-2 py-1 rounded bg-surface-1 border border-border-subdued hover:border-primary-cyan text-[#cbd5e1] text-[11px]"
-                    >
-                      {sug}
-                    </button>
-                  )
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

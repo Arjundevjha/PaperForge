@@ -1,6 +1,14 @@
 import { getSupabaseAdmin } from './admin';
 import type { PaperForgeDataStore } from '@paperforge/db';
-import { formatProvenance, SingaporeSchoolCode, Question, Answer } from '@paperforge/shared';
+import {
+  formatProvenance,
+  SingaporeSchoolCode,
+  Question,
+  Answer,
+  QuestionType,
+  SubjectId,
+  SUBJECT_METADATA,
+} from '@paperforge/shared';
 
 let questionsSynced = false;
 let worksheetsSynced = false;
@@ -11,9 +19,25 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore, force =
   if (!supabase) return store.listQuestions().length;
 
   try {
+    // Load sources first so provenance uses real paperNumber, paperType, school, year, subject
+    const sourceMap = new Map<string, any>();
+    let srcPage = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: srcData, error: srcErr } = await supabase
+        .from('sources')
+        .select('id, filename, school, year, subject, paper_type, paper_number')
+        .range(srcPage * pageSize, (srcPage + 1) * pageSize - 1);
+      if (srcErr || !srcData || srcData.length === 0) break;
+      for (const s of srcData) {
+        sourceMap.set(s.id, s);
+      }
+      if (srcData.length < pageSize) break;
+      srcPage++;
+    }
+
     let allQuestions: any[] = [];
     let page = 0;
-    const pageSize = 1000;
     while (true) {
       const { data, error } = await supabase
         .from('questions')
@@ -29,15 +53,19 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore, force =
       const newQuestions: Question[] = [];
       for (const q of allQuestions) {
         const parts = q.id.split('-');
-        const schoolCode = (parts[0]?.toUpperCase() || 'JPJC') as SingaporeSchoolCode;
-        const year = parseInt(parts[1], 10) || 2022;
-        const paperNum = parseInt(parts[2]?.replace(/\D/g, ''), 10) || 1;
+        const src = sourceMap.get(q.source_id);
+        const schoolCode = (src?.school || parts[0]?.toUpperCase() || 'JPJC') as SingaporeSchoolCode;
+        const year = src?.year ?? (parseInt(parts[1], 10) || 2022);
+        const paperNum = src?.paper_number ?? (parseInt(parts[2]?.replace(/\D/g, ''), 10) || 1);
+        const paperType = src?.paper_type || 'PRELIM';
+        const subjectId = (src?.subject || q.subject || 'mathematics') as SubjectId;
+        const subjectName = SUBJECT_METADATA[subjectId]?.name || 'H2 Mathematics';
 
         const prov = formatProvenance(
           schoolCode,
           year,
-          'H2 Mathematics',
-          'PRELIM',
+          subjectName,
+          paperType,
           paperNum,
           `Q${q.question_number}`,
           q.source_id
@@ -50,7 +78,10 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore, force =
           parentQuestionId: q.parent_question_id,
           subject: q.subject,
           chapter: q.chapter,
+          topicId: q.topic_id ?? null,
           subtopic: q.subtopic,
+          subtopicId: q.subtopic_id ?? null,
+          questionType: q.question_type || undefined,
           syllabusVersionId: q.syllabus_version_id,
           textContent: q.text_content,
           marks: q.marks,
@@ -94,18 +125,22 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore, force =
       const newAnswers: Answer[] = [];
       for (const a of allAnswers) {
         const parts = a.question_id.split('-');
-        const schoolCode = (parts[0]?.toUpperCase() || 'JPJC') as SingaporeSchoolCode;
-        const year = parseInt(parts[1], 10) || 2022;
-        const paperNum = parseInt(parts[2]?.replace(/\D/g, ''), 10) || 1;
+        const src = sourceMap.get(a.solution_source_id || a.source_id) || sourceMap.get(a.source_id);
+        const schoolCode = (src?.school || parts[0]?.toUpperCase() || 'JPJC') as SingaporeSchoolCode;
+        const year = src?.year ?? (parseInt(parts[1], 10) || 2022);
+        const paperNum = src?.paper_number ?? (parseInt(parts[2]?.replace(/\D/g, ''), 10) || 1);
+        const paperType = src?.paper_type || 'PRELIM';
+        const subjectId = (src?.subject || 'mathematics') as SubjectId;
+        const subjectName = SUBJECT_METADATA[subjectId]?.name || 'H2 Mathematics';
 
         const prov = formatProvenance(
           schoolCode,
           year,
-          'H2 Mathematics',
-          'PRELIM',
+          subjectName,
+          paperType,
           paperNum,
           `Q${a.question_number}`,
-          a.source_id
+          a.solution_source_id || a.source_id
         );
 
         newAnswers.push({
@@ -113,9 +148,16 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore, force =
           sourceId: a.source_id,
           questionId: a.question_id,
           questionNumber: a.question_number,
+          questionType: a.question_type || undefined,
+          topicId: a.topic_id ?? null,
+          subtopicId: a.subtopic_id ?? null,
+          diagramUrl: a.diagram_url || `/answers/${a.question_id}.png`,
+          solutionSourceId: a.solution_source_id ?? null,
+          solutionSourceFilename: a.solution_source_filename ?? src?.filename ?? null,
           answerContent: a.answer_content,
           answerHash: a.answer_hash,
           markSchemeNotes: a.mark_scheme_notes,
+          verificationStatus: a.verification_status || undefined,
           provenance: prov,
           status: a.status,
         });
@@ -203,7 +245,10 @@ export async function reclassifyQuestionInDb(
   questionId: string,
   chapter: string,
   subtopic?: string | null,
-  status?: Question['status']
+  status?: Question['status'],
+  questionType?: QuestionType,
+  topicId?: string | null,
+  subtopicId?: string | null
 ): Promise<{
   question: Question | undefined;
   movedFromWorksheet?: string;
@@ -216,6 +261,9 @@ export async function reclassifyQuestionInDb(
     chapter,
     subtopic: subtopic || undefined,
     ...(status ? { status } : {}),
+    ...(questionType ? { questionType } : {}),
+    ...(topicId !== undefined ? { topicId } : {}),
+    ...(subtopicId !== undefined ? { subtopicId } : {}),
   });
 
   let movedFromWorksheet: string | undefined;
@@ -264,6 +312,9 @@ export async function reclassifyQuestionInDb(
       };
       if (subtopic !== undefined) updates.subtopic = subtopic;
       if (status) updates.status = status;
+      if (questionType) updates.question_type = questionType;
+      if (topicId !== undefined) updates.topic_id = topicId;
+      if (subtopicId !== undefined) updates.subtopic_id = subtopicId;
 
       await supabase.from('questions').update(updates).eq('id', questionId);
 

@@ -57,14 +57,23 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const { questionId, chapter, subtopic, status } = parsed.data;
+    const { questionId, chapter, subtopic, status, questionType, topicId, subtopicId } = parsed.data;
     const store = getGlobalStore();
 
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
       await syncAllQuestionsFromDb(store);
     }
 
-    const result = await reclassifyQuestionInDb(store, questionId, chapter, subtopic, status);
+    const result = await reclassifyQuestionInDb(
+      store,
+      questionId,
+      chapter,
+      subtopic,
+      status,
+      questionType,
+      topicId,
+      subtopicId
+    );
 
     if (!result.question) {
       return NextResponse.json({ error: `Question ${questionId} not found` }, { status: 404 });

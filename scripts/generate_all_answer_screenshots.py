@@ -41,7 +41,8 @@ SCHOOL_ALIASES = {
     'pioneer': 'PJC', 'pjc': 'PJC',
     'serangoon': 'SRJC', 'srjc': 'SRJC',
     'tampines': 'TPJC', 'tpjc': 'TPJC',
-    'millennia': 'MI', 'mi': 'MI',
+    'millennia': 'MI', 'mipu3': 'MI', 'mipu': 'MI', 'pu3': 'MI', 'mi': 'MI',
+    'jjc': 'JPJC', 'yjc': 'YIJC',
 }
 
 def extract_year_from_doc(doc):
@@ -71,11 +72,17 @@ def extract_meta(fn):
         return {'sch': None, 'yr': None, 'p': None, 'typ': None, 'num': None, 'fn': ''}
     fn_lower = fn.lower()
     sch = None
-    # Check aliases in descending order of length to prevent substring collision
-    for alias, code in sorted(SCHOOL_ALIASES.items(), key=lambda x: -len(x[0])):
-        if re.search(r'(?:^|[^a-z0-9])' + re.escape(alias) + r'(?:[^a-z0-9]|$)', fn_lower):
-            sch = code
-            break
+    best_pos = len(fn_lower) + 1
+    best_len = -1
+    # Pick the earliest school alias match in filename (tie-break by longest alias)
+    for alias, code in SCHOOL_ALIASES.items():
+        m = re.search(r'(?:^|[^a-z0-9])' + re.escape(alias) + r'(?:[^a-z0-9]|$)', fn_lower)
+        if m:
+            pos = m.start()
+            if pos < best_pos or (pos == best_pos and len(alias) > best_len):
+                best_pos = pos
+                best_len = len(alias)
+                sch = code
     yr_m = re.search(r'(?:^|[^0-9])(20[0-2]\d)(?:[^0-9]|$)', fn)
     yr = yr_m.group(1) if yr_m else None
 
@@ -105,7 +112,19 @@ KNOWN_TWIN_SOLUTIONS = {
     '2024_DHS_Y5_H2_Math_Promo_Practice_Paper_2_(QP)_12912.pdf': '2024_DHS_Y5_H2_Math_Promo_Practice_Paper_2_Suggested_Solutions_12914.pdf',
 }
 
+_RESOLVE_CACHE = {}
+
 def resolve_solution_file(qp_fn, paper_num=None):
+    if not qp_fn:
+        return None
+    cache_key = (qp_fn, paper_num)
+    if cache_key in _RESOLVE_CACHE:
+        return _RESOLVE_CACHE[cache_key]
+    res = _resolve_solution_file_uncached(qp_fn, paper_num)
+    _RESOLVE_CACHE[cache_key] = res
+    return res
+
+def _resolve_solution_file_uncached(qp_fn, paper_num=None):
     if not qp_fn:
         return None
 
@@ -210,8 +229,11 @@ def resolve_solution_file(qp_fn, paper_num=None):
         # If both schools are detected, they MUST match. Never allow cross-school pairing.
         if qp_meta['sch'] and c_meta['sch'] and qp_meta['sch'] != c_meta['sch']:
             continue
-        # If one or both schools are None, only permit if tight upload batch (diff <= 5)
-        if not qp_meta['sch'] or not c_meta['sch']:
+        # If qp_meta['sch'] is known, NEVER allow a candidate with c_meta['sch'] is None to bypass via tight batch.
+        if qp_meta['sch'] and not c_meta['sch']:
+            continue
+        # Only when qp_meta['sch'] is None, permit tight upload batch (diff <= 5)
+        if not qp_meta['sch']:
             is_tight_batch = bool(
                 qp_meta['num'] and c_meta['num'] and abs(qp_meta['num'] - c_meta['num']) <= 5
                 and (not qp_meta['yr'] or not c_meta['yr'] or qp_meta['yr'] == c_meta['yr'])
@@ -566,6 +588,7 @@ def main():
         store = json.load(f)
 
     sources = {s['id']: s for s in store.get('sources', [])}
+    sources_by_fn = {s.get('filename'): s['id'] for s in store.get('sources', []) if s.get('filename')}
     questions = {q['id']: q for q in store.get('questions', [])}
     answers = {a['questionId']: a for a in store.get('answers', [])}
 
@@ -613,11 +636,21 @@ def main():
 
         sol_fn = resolve_solution_file(qp_fn, paper_num)
         if not sol_fn:
+            a = answers.get(qid)
+            if a:
+                a['solutionSourceFilename'] = None
+                a['solutionSourceId'] = None
+                a['verificationStatus'] = 'MISSING'
             missing_count += 1
             continue
 
         sol_path = os.path.join(PAPERS_DIR, sol_fn)
         if not os.path.exists(sol_path):
+            a = answers.get(qid)
+            if a:
+                a['solutionSourceFilename'] = None
+                a['solutionSourceId'] = None
+                a['verificationStatus'] = 'MISSING'
             missing_count += 1
             continue
 
@@ -669,9 +702,20 @@ def main():
             a = answers.get(qid)
             if a:
                 a['diagramUrl'] = f'/answers/{qid}.png'
+                a['solutionSourceFilename'] = sol_fn
+                a['solutionSourceId'] = sources_by_fn.get(sol_fn)
+                if qp_fn in KNOWN_TWIN_SOLUTIONS or sol_fn in SCANNED_PAPER_MARKERS:
+                    a['verificationStatus'] = 'VERIFIED'
+                else:
+                    a['verificationStatus'] = 'AUTO_MATCHED'
 
             success_count += 1
         else:
+            a = answers.get(qid)
+            if a:
+                a['solutionSourceFilename'] = sol_fn
+                a['solutionSourceId'] = sources_by_fn.get(sol_fn)
+                a['verificationStatus'] = 'MISSING'
             missing_count += 1
 
         if idx % 100 == 0 or idx == len(used_qids):
