@@ -133,6 +133,86 @@ export async function PATCH(request: Request) {
   }
 }
 
+async function createGitHubMismatchIssue(payload: {
+  reviewItemId: string;
+  questionId: string;
+  answerId?: string;
+  citation?: string;
+  solutionSourceFilename?: string;
+  reason?: string;
+  flaggedBy?: string;
+}): Promise<{ issueCreated: boolean; issueNumber?: number; issueUrl?: string; reason?: string }> {
+  const token = process.env.GITHUB_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+  if (!token) {
+    return { issueCreated: false, reason: 'GITHUB_DISPATCH_TOKEN not configured' };
+  }
+
+  const repo = process.env.GITHUB_REPO || 'Arjundevjha/PaperForge';
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
+  const qImgUrl = supabaseUrl
+    ? `${supabaseUrl}/storage/v1/object/public/paperforge/questions/${payload.questionId}.png`
+    : 'N/A';
+  const aImgUrl = supabaseUrl
+    ? `${supabaseUrl}/storage/v1/object/public/paperforge/answers/${payload.questionId}.png`
+    : 'N/A';
+
+  const title = `[Mismatch] ${payload.citation || payload.questionId}${
+    payload.reason ? ` — ${payload.reason.slice(0, 60)}` : ''
+  }`;
+  const body = [
+    `### Flagged Answer Key Mismatch`,
+    ``,
+    `- **Question ID**: \`${payload.questionId}\``,
+    `- **Answer ID**: \`${payload.answerId || 'N/A'}\``,
+    `- **Review Item ID**: \`${payload.reviewItemId}\``,
+    `- **Citation**: ${payload.citation || 'N/A'}`,
+    `- **Current Solution File**: \`${payload.solutionSourceFilename || 'N/A'}\``,
+    `- **Reason**: ${payload.reason || 'Flagged from Teacher Resource Hub'}`,
+    `- **Flagged By**: ${payload.flaggedBy || 'Teacher'}`,
+    ``,
+    `### Media Links`,
+    `- Question PNG: ${qImgUrl}`,
+    `- Current Answer PNG: ${aImgUrl}`,
+    ``,
+    `### Support Agent Instructions`,
+    `Use the \`paperforge-mismatch-support\` skill: check \`docs/mismatch-patterns.md\`, fix the pairing/crop in local \`papers/\` + \`scripts/\`, sync to Supabase, document the root cause in \`docs/mismatch-triage-log.md\`, and close this issue.`,
+  ].join('\n');
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/issues`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title,
+        body,
+        labels: ['answer-mismatch'],
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return {
+        issueCreated: false,
+        reason: `GitHub issue HTTP ${res.status}: ${text.slice(0, 120)}`,
+      };
+    }
+
+    const data = await res.json();
+    return {
+      issueCreated: true,
+      issueNumber: data.number,
+      issueUrl: data.html_url,
+    };
+  } catch (err: any) {
+    return { issueCreated: false, reason: err?.message || 'GitHub issue creation failed' };
+  }
+}
+
 async function triggerGitHubMismatchAgent(payload: {
   reviewItemId: string;
   questionId: string;
@@ -243,6 +323,8 @@ export async function POST(request: Request) {
       });
     }
 
+    const existingQ = store.getQuestionById(questionId);
+
     // 3. Create a PENDING review item
     const reviewItemId = `rev_mismatch_${questionId}_${Date.now()}`;
     const reviewItem: ReviewItem = {
@@ -254,6 +336,7 @@ export async function POST(request: Request) {
       details: {
         questionId,
         answerId: answerId || existingAns?.id,
+        citation: existingQ?.provenance?.citation,
         solutionSourceFilename: existingAns?.solutionSourceFilename,
         reason: reason?.trim() || 'Flagged as answer key mismatch from Teacher Resource Hub',
         flaggedBy: actor,
@@ -285,20 +368,36 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Trigger GitHub Actions Cloud Auto-Fix Agent (best-effort)
-    const dispatchResult = await triggerGitHubMismatchAgent({
+    // 4. Open a GitHub Issue (`answer-mismatch`) for the Support Agent (+ optional dispatch)
+    const issueResult = await createGitHubMismatchIssue({
       reviewItemId: reviewItem.id,
       questionId,
       answerId: answerId || existingAns?.id,
+      citation: existingQ?.provenance?.citation || undefined,
+      solutionSourceFilename: existingAns?.solutionSourceFilename || undefined,
       reason: reason?.trim(),
+      flaggedBy: actor,
     });
+
+    const dispatchResult =
+      process.env.ENABLE_CLOUD_DISPATCH === 'true'
+        ? await triggerGitHubMismatchAgent({
+            reviewItemId: reviewItem.id,
+            questionId,
+            answerId: answerId || existingAns?.id,
+            reason: reason?.trim(),
+          })
+        : { dispatched: false };
 
     return NextResponse.json({
       success: true,
       data: reviewItem,
       verificationStatus,
+      issueCreated: issueResult.issueCreated,
+      issueNumber: issueResult.issueNumber,
+      issueUrl: issueResult.issueUrl,
+      issueReason: issueResult.reason,
       dispatched: dispatchResult.dispatched,
-      dispatchReason: dispatchResult.reason,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });

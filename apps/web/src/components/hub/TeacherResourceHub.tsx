@@ -211,6 +211,10 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
 
       if (targetStatus === 'VERIFIED') {
         setReclassifyNotification(`Marked ${q.provenance?.citation || q.id} answer as VERIFIED`);
+      } else if (data.issueCreated && data.issueNumber) {
+        setReclassifyNotification(
+          `Flagged ${q.provenance?.citation || q.id} • GitHub Issue #${data.issueNumber} opened`
+        );
       } else if (data.dispatched) {
         setReclassifyNotification(
           `Flagged ${q.provenance?.citation || q.id} • Cloud Auto-Fix Agent dispatched`
