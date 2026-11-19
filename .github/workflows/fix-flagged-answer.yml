@@ -1,0 +1,52 @@
+name: PaperForge Cloud Auto-Fix Mismatch Agent
+
+on:
+  repository_dispatch:
+    types: [paperforge_fix_mismatch]
+  workflow_dispatch:
+    inputs:
+      question_id:
+        description: 'Optional Question ID to fix (leave blank to sweep all pending)'
+        required: false
+        type: string
+      reason:
+        description: 'Optional mismatch reason'
+        required: false
+        type: string
+  schedule:
+    - cron: '0 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  fix-flagged-answer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && pip install pymupdf pillow requests
+
+      - name: Run Cloud Auto-Fix Agent
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          QUESTION_ID: ${{ github.event.client_payload.questionId || inputs.question_id || '' }}
+          REVIEW_ITEM_ID: ${{ github.event.client_payload.reviewItemId || '' }}
+          FLAG_REASON: ${{ github.event.client_payload.reason || inputs.reason || 'Flagged answer mismatch' }}
+        run: |
+          if [ -n "$QUESTION_ID" ]; then
+            python scripts/fix_flagged_answer.py --question-id "$QUESTION_ID" --review-item-id "$REVIEW_ITEM_ID" --reason "$FLAG_REASON"
+          else
+            python scripts/fix_flagged_answer.py --sweep
+          fi
