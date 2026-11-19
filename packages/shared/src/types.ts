@@ -258,7 +258,8 @@ export type ReviewIssueType =
   | 'MISSING_DIAGRAM'
   | 'UNMATCHED_ANSWER'
   | 'UNCERTAIN_CLASSIFICATION'
-  | 'POSSIBLE_DUPLICATE';
+  | 'POSSIBLE_DUPLICATE'
+  | 'MISMATCH_FLAGGED';
 
 export interface ReviewItem {
   id: string;

@@ -91,6 +91,24 @@ export const AnswerVerificationStatusSchema = z.enum([
   'MISSING',
 ]);
 
+export const ReviewFlagPayloadSchema = z.object({
+  questionId: z.string().min(1),
+  answerId: z.string().optional(),
+  issueType: z
+    .enum([
+      'AMBIGUOUS_BOUNDARY',
+      'MISSING_DIAGRAM',
+      'UNMATCHED_ANSWER',
+      'UNCERTAIN_CLASSIFICATION',
+      'POSSIBLE_DUPLICATE',
+      'MISMATCH_FLAGGED',
+    ])
+    .optional()
+    .default('MISMATCH_FLAGGED'),
+  reason: z.string().max(500).optional(),
+  verificationStatus: AnswerVerificationStatusSchema.optional().default('MISMATCH_FLAGGED'),
+});
+
 export const QuestionReclassifyPayloadSchema = z.object({
   questionId: z.string().min(1),
   chapter: z.string().min(1),

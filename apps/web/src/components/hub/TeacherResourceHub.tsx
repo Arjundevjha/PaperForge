@@ -119,6 +119,12 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
   const [reclassifyingQuestion, setReclassifyingQuestion] = useState<Question | null>(null);
   const [reclassifyNotification, setReclassifyNotification] = useState<string | null>(null);
   const [optimisticOverrides, setOptimisticOverrides] = useState<Map<string, Question>>(new Map());
+  const [answerStatusOverrides, setAnswerStatusOverrides] = useState<
+    Map<string, AnswerVerificationStatus>
+  >(new Map());
+  const [flaggingQuestionId, setFlaggingQuestionId] = useState<string | null>(null);
+  const [flagReason, setFlagReason] = useState<string>('');
+  const [isSubmittingFlag, setIsSubmittingFlag] = useState<boolean>(false);
 
   // React-state image fallback tracking (replaces document.getElementById)
   const [failedQuestionImages, setFailedQuestionImages] = useState<Set<string>>(new Set());
@@ -171,6 +177,57 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
     }
     return map;
   }, [answers]);
+
+  const handleAnswerVerificationAction = async (
+    q: Question,
+    ans: Answer | undefined,
+    targetStatus: 'MISMATCH_FLAGGED' | 'VERIFIED',
+    reason?: string
+  ) => {
+    setIsSubmittingFlag(true);
+    try {
+      const res = await fetch('/api/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: q.id,
+          answerId: ans?.id,
+          verificationStatus: targetStatus,
+          reason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update answer verification status');
+      }
+
+      setAnswerStatusOverrides((prev) => {
+        const next = new Map(prev);
+        next.set(q.id, targetStatus);
+        return next;
+      });
+      setFlaggingQuestionId(null);
+      setFlagReason('');
+
+      if (targetStatus === 'VERIFIED') {
+        setReclassifyNotification(`Marked ${q.provenance?.citation || q.id} answer as VERIFIED`);
+      } else if (data.dispatched) {
+        setReclassifyNotification(
+          `Flagged ${q.provenance?.citation || q.id} • Cloud Auto-Fix Agent dispatched`
+        );
+      } else {
+        setReclassifyNotification(
+          `Flagged ${q.provenance?.citation || q.id} in Review Queue (/review)`
+        );
+      }
+      setTimeout(() => setReclassifyNotification(null), 5000);
+    } catch (err: any) {
+      setReclassifyNotification(err?.message || 'Failed to flag mismatch');
+      setTimeout(() => setReclassifyNotification(null), 5000);
+    } finally {
+      setIsSubmittingFlag(false);
+    }
+  };
 
   // Dynamic school and year options from subject questions
   const { availableSchools, availableYears } = useMemo(() => {
@@ -840,7 +897,7 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                   <>
                     {worksheetQuestions.slice(0, displayLimit).map((q, idx) => {
                       const ans = answerMap.get(q.id);
-                      const verStatus = getAnswerVerificationStatus(ans);
+                      const verStatus = answerStatusOverrides.get(q.id) || getAnswerVerificationStatus(ans);
                       const badge = VERIFICATION_BADGE_CONFIG[verStatus];
                       const BadgeIcon = badge.icon;
                       const qImgFailed = failedQuestionImages.has(q.id);
@@ -894,29 +951,94 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                           )}
 
                           {/* Answer Pairing & Verification Strip */}
-                          <div className="no-print mt-2 px-2.5 py-1.5 rounded bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-[10px] font-sans">
-                            <div className="flex items-center gap-2 flex-wrap min-w-0">
-                              <span
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-mono font-semibold text-[9px] shrink-0 ${badge.className}`}
-                              >
-                                <BadgeIcon size={10} />
-                                <span>{badge.label}</span>
-                              </span>
-                              <span className="text-slate-600 font-mono truncate">
-                                {ans
-                                  ? `Answer: ${ans.provenance?.citation || ans.id}${
-                                      ans.solutionSourceFilename ? ` (${ans.solutionSourceFilename})` : ''
-                                    }`
-                                  : 'No paired answer key found'}
-                              </span>
+                          <div className="no-print mt-2 px-2.5 py-1.5 rounded bg-slate-50 border border-slate-200 text-[10px] font-sans">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-mono font-semibold text-[9px] shrink-0 ${badge.className}`}
+                                >
+                                  <BadgeIcon size={10} />
+                                  <span>{badge.label}</span>
+                                </span>
+                                <span className="text-slate-600 font-mono truncate">
+                                  {ans
+                                    ? `Answer: ${ans.provenance?.citation || ans.id}${
+                                        ans.solutionSourceFilename ? ` (${ans.solutionSourceFilename})` : ''
+                                      }`
+                                    : 'No paired answer key found'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2.5 shrink-0">
+                                {verStatus !== 'VERIFIED' && (
+                                  <button
+                                    type="button"
+                                    disabled={isSubmittingFlag}
+                                    onClick={() => handleAnswerVerificationAction(q, ans, 'VERIFIED')}
+                                    className="text-[10px] font-mono text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer disabled:opacity-50"
+                                  >
+                                    Verify
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  disabled={isSubmittingFlag}
+                                  onClick={() => {
+                                    setFlaggingQuestionId((prev) => (prev === q.id ? null : q.id));
+                                    setFlagReason('');
+                                  }}
+                                  className="text-[10px] font-mono text-rose-700 hover:text-rose-900 hover:underline cursor-pointer disabled:opacity-50"
+                                >
+                                  Flag Mismatch
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setReclassifyingQuestion(q)}
+                                  className="text-[10px] font-mono text-sky-700 hover:text-sky-900 hover:underline cursor-pointer"
+                                >
+                                  Reclassify
+                                </button>
+                              </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setReclassifyingQuestion(q)}
-                              className="text-[10px] font-mono text-sky-700 hover:text-sky-900 hover:underline shrink-0 cursor-pointer"
-                            >
-                              Reclassify
-                            </button>
+
+                            {flaggingQuestionId === q.id && (
+                              <div className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap items-center gap-1.5">
+                                {['Wrong question', 'Cut off', 'Wrong paper', 'Missing'].map((preset) => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    disabled={isSubmittingFlag}
+                                    onClick={() =>
+                                      handleAnswerVerificationAction(q, ans, 'MISMATCH_FLAGGED', preset)
+                                    }
+                                    className="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[9px] font-mono cursor-pointer disabled:opacity-50"
+                                  >
+                                    {preset}
+                                  </button>
+                                ))}
+                                <input
+                                  type="text"
+                                  value={flagReason}
+                                  onChange={(e) => setFlagReason(e.target.value)}
+                                  placeholder="Optional note..."
+                                  className="flex-1 min-w-[120px] px-2 py-0.5 rounded border border-slate-300 bg-white text-[10px] text-slate-800 focus:outline-none focus:border-rose-400"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isSubmittingFlag}
+                                  onClick={() =>
+                                    handleAnswerVerificationAction(
+                                      q,
+                                      ans,
+                                      'MISMATCH_FLAGGED',
+                                      flagReason || 'Flagged from Teacher Resource Hub'
+                                    )
+                                  }
+                                  className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-mono font-semibold cursor-pointer disabled:opacity-50"
+                                >
+                                  {isSubmittingFlag ? 'Sending...' : 'Flag & Run Agent'}
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {/* Marking Scheme Overlay if enabled */}

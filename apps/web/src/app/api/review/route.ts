@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getGlobalStore } from '@paperforge/db';
-import { ReviewItem, ReviewResolutionPayloadSchema } from '@paperforge/shared';
+import {
+  ReviewFlagPayloadSchema,
+  ReviewItem,
+  ReviewResolutionPayloadSchema,
+} from '@paperforge/shared';
 import { getCurrentUser } from '../../../lib/auth';
 import { getSupabaseAdmin } from '../../../lib/supabase/admin';
 
@@ -126,5 +130,177 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true, data: updated });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+async function triggerGitHubMismatchAgent(payload: {
+  reviewItemId: string;
+  questionId: string;
+  answerId?: string;
+  reason?: string;
+}): Promise<{ dispatched: boolean; reason?: string }> {
+  const token = process.env.GITHUB_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+  if (!token) {
+    return { dispatched: false, reason: 'GITHUB_DISPATCH_TOKEN not configured' };
+  }
+
+  const repo = process.env.GITHUB_REPO || 'Arjundevjha/PaperForge';
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event_type: 'paperforge_fix_mismatch',
+        client_payload: payload,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return {
+        dispatched: false,
+        reason: `GitHub dispatch HTTP ${res.status}: ${text.slice(0, 120)}`,
+      };
+    }
+
+    return { dispatched: true };
+  } catch (err: any) {
+    return { dispatched: false, reason: err?.message || 'GitHub dispatch failed' };
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    let user = null;
+    try {
+      user = await getCurrentUser();
+    } catch {}
+
+    const rawBody = await request.json();
+    const parsed = ReviewFlagPayloadSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid mismatch flag payload', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { questionId, answerId, issueType, reason, verificationStatus } = parsed.data;
+    const store = getGlobalStore();
+    const supabase = getSupabaseAdmin();
+    const nowIso = new Date().toISOString();
+    const actor = user?.name || user?.email || user?.id || 'Teacher';
+
+    // 1. Update in-memory store answer status if loaded
+    const existingAns = store.getAnswerByQuestionId(questionId);
+    if (existingAns) {
+      existingAns.verificationStatus = verificationStatus;
+    }
+
+    // 2. Persist verification_status in Supabase answers table
+    if (supabase) {
+      try {
+        const updateQuery = answerId
+          ? supabase.from('answers').update({ verification_status: verificationStatus }).eq('id', answerId)
+          : supabase
+              .from('answers')
+              .update({ verification_status: verificationStatus })
+              .eq('question_id', questionId);
+        await updateQuery;
+      } catch (dbErr) {
+        console.warn('Failed to update answer verification_status in Supabase:', dbErr);
+      }
+    }
+
+    // If user is marking it VERIFIED directly, resolve any pending mismatch items and return
+    if (verificationStatus === 'VERIFIED') {
+      if (supabase) {
+        try {
+          await supabase
+            .from('review_items')
+            .update({
+              status: 'RESOLVED',
+              reviewed_by: actor,
+              reviewed_at: nowIso,
+            })
+            .eq('status', 'PENDING')
+            .eq('issue_type', 'MISMATCH_FLAGGED')
+            .or(`entity_id.eq.${questionId}${answerId ? `,entity_id.eq.${answerId}` : ''}`);
+        } catch (dbErr) {
+          console.warn('Failed to resolve pending mismatch items:', dbErr);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        verificationStatus,
+        dispatched: false,
+      });
+    }
+
+    // 3. Create a PENDING review item
+    const reviewItemId = `rev_mismatch_${questionId}_${Date.now()}`;
+    const reviewItem: ReviewItem = {
+      id: reviewItemId,
+      entityType: 'ANSWER',
+      entityId: questionId,
+      issueType,
+      confidence: 0,
+      details: {
+        questionId,
+        answerId: answerId || existingAns?.id,
+        solutionSourceFilename: existingAns?.solutionSourceFilename,
+        reason: reason?.trim() || 'Flagged as answer key mismatch from Teacher Resource Hub',
+        flaggedBy: actor,
+        flaggedAt: nowIso,
+      },
+      status: 'PENDING',
+      createdAt: nowIso,
+    };
+
+    store.addReviewItem(reviewItem);
+
+    if (supabase) {
+      try {
+        await supabase.from('review_items').upsert(
+          {
+            id: reviewItem.id,
+            entity_type: reviewItem.entityType,
+            entity_id: reviewItem.entityId,
+            issue_type: reviewItem.issueType,
+            confidence: reviewItem.confidence,
+            details: reviewItem.details,
+            status: reviewItem.status,
+            created_at: reviewItem.createdAt,
+          },
+          { onConflict: 'id' }
+        );
+      } catch (dbErr) {
+        console.error('Failed to persist flagged review item to Supabase:', dbErr);
+      }
+    }
+
+    // 4. Trigger GitHub Actions Cloud Auto-Fix Agent (best-effort)
+    const dispatchResult = await triggerGitHubMismatchAgent({
+      reviewItemId: reviewItem.id,
+      questionId,
+      answerId: answerId || existingAns?.id,
+      reason: reason?.trim(),
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: reviewItem,
+      verificationStatus,
+      dispatched: dispatchResult.dispatched,
+      dispatchReason: dispatchResult.reason,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
 }
