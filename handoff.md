@@ -36,3 +36,13 @@
 - `npm test`: 42/43 passing (1 pre-existing environment check in `tests/diagnose.test.mjs:21` for a Desktop PDF path).
 - `njc-2012-p1-q07`: verified in store, local crop (`apps/web/public/answers/njc-2012-p1-q07.png`), Supabase Storage (`HTTP/2 200`, `88549` bytes), and Supabase PostgreSQL (`NJC 2012 PRELIM P2 Q7`, `question_type="counting_probability"`).
 - **Pending user approval**: `git commit` / `git push` / Vercel deployment.
+
+---
+
+## 4. Cloud Auto-Fix Mismatch Agent (Added Nov 19, 2026)
+- **Inline Flagging & Verification (`apps/web/src/components/hub/TeacherResourceHub.tsx`)**: Added **Verify** and **Flag Mismatch** buttons (with quick presets `Wrong question`, `Cut off`, `Wrong paper`, `Missing`, plus custom note) on the Answer Pairing & Verification Strip.
+- **Review Flag API & GitHub Dispatch (`apps/web/src/app/api/review/route.ts`, `packages/shared/src/types.ts`, `packages/shared/src/validation.ts`)**: Added `MISMATCH_FLAGGED` to `ReviewIssueType`, `ReviewFlagPayloadSchema`, and `POST /api/review` to update `answers.verification_status`, create `PENDING` `review_items`, and fire GitHub `repository_dispatch` (`paperforge_fix_mismatch`).
+- **GitHub Actions Cloud Agent (`.github/workflows/fix-flagged-answer.yml`, `scripts/fix_flagged_answer.py`)**: Triggers on `repository_dispatch`, `workflow_dispatch`, or 6-hourly cron; re-crops from `_MS_.pdf` in Supabase Storage via `PyMuPDF` if present, or runs Groq candidate matching / worked-solution diagnosis (`tests/review_flag.test.mjs`: 4/4 passing, `npm run build` passing, Snyk Code scan 0 issues).
+- **Required Secrets**:
+  - **Vercel**: `GITHUB_DISPATCH_TOKEN` (fine-grained PAT with `Actions: write` / `Contents: write` on `Arjundevjha/PaperForge`).
+  - **GitHub Repo Secrets**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GROQ_API_KEY`.
