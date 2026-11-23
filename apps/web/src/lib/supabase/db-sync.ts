@@ -82,6 +82,7 @@ export async function syncAllQuestionsFromDb(store: PaperForgeDataStore, force =
           subtopic: q.subtopic,
           subtopicId: q.subtopic_id ?? null,
           questionType: q.question_type || undefined,
+          difficulty: q.difficulty || undefined,
           syllabusVersionId: q.syllabus_version_id,
           textContent: q.text_content,
           marks: q.marks,

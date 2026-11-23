@@ -6,10 +6,14 @@
  * 1. Classify questionType ('structured' | 'proof' | 'graph_sketch' | 'application' | 'calculation' | 'statistical_test' | 'counting_probability')
  * 2. Verify/correct chapter, subtopic, topicId, subtopicId
  * 3. Detect any remaining Q↔A semantic mismatches
+ * 4. Tag each question's difficulty (EASY | MEDIUM | HARD), falling back to
+ *    the deterministic classifyDifficulty heuristic when Groq omits it
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { classifyDifficulty } from '@paperforge/classification';
+import type { Difficulty, SubjectId } from '@paperforge/shared';
 
 const STORE_PATH = path.resolve(process.cwd(), 'packages/db/.paperforge-store.json');
 const CACHE_PATH = path.resolve(process.cwd(), 'scripts/.groq_classify_cache.json');
@@ -32,6 +36,8 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODELS = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
 const BATCH_SIZE = parseInt(process.env.GROQ_BATCH_SIZE || '6', 10);
 const DELAY_MS = parseInt(process.env.GROQ_DELAY_MS || '7000', 10);
+
+const VALID_DIFFICULTY = new Set<Difficulty>(['EASY', 'MEDIUM', 'HARD']);
 
 const VALID_QUESTION_TYPES = new Set([
   'structured',
@@ -112,7 +118,11 @@ For each question item, classify:
    - "Complex Numbers": "Cartesian Form & Operations" | "Roots of Polynomials" | "Argand Diagrams & Geometric Loci"
    - "Calculus": "Differentiation Techniques & Applications" | "Integration Techniques & Applications" | "Differential Equations" | "Maclaurin Series"
    - "Probability and Statistics": "Probability and Random Variables" | "Normal Distribution" | "Hypothesis Testing" | "Correlation and Linear Regression"
-3. "qaMatch": If "answerText" is non-placeholder (not starting with "Marking scheme for ["), check if "answerText" mathematically corresponds to "questionText" ("MATCH" or "MISMATCH"). If placeholder or empty, return "UNKNOWN".
+3. "difficulty": EXACTLY ONE of "EASY" | "MEDIUM" | "HARD":
+   - "EASY": single-step recall/substitution, one formula, typically <= 4 marks
+   - "MEDIUM": multi-step but scaffolded, typical 4-6 mark H2 question
+   - "HARD": formal proof ("prove", "show that", "hence/deduce"), heavy calculus, 3D vectors/planes, synthesis across topics, typically 5+ marks
+4. "qaMatch": If "answerText" is non-placeholder (not starting with "Marking scheme for ["), check if "answerText" mathematically corresponds to "questionText" ("MATCH" or "MISMATCH"). If placeholder or empty, return "UNKNOWN".
 
 Respond ONLY with valid JSON:
 {
@@ -122,6 +132,7 @@ Respond ONLY with valid JSON:
       "questionType": "<type>",
       "chapter": "<Exact Chapter Name>",
       "subtopic": "<Exact Subtopic Name>",
+      "difficulty": "EASY" | "MEDIUM" | "HARD",
       "qaMatch": "MATCH" | "MISMATCH" | "UNKNOWN",
       "reason": "<brief note if changed or mismatch>"
     }
@@ -131,7 +142,14 @@ Respond ONLY with valid JSON:
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function callGroqWithBackoff(
-  items: { id: string; currentChapter: string; currentSubtopic: string; questionText: string; answerText: string }[],
+  items: {
+    id: string;
+    currentChapter: string;
+    currentSubtopic: string;
+    marks: number | null;
+    questionText: string;
+    answerText: string;
+  }[],
   batchIdx = 0
 ): Promise<any[]> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -240,6 +258,7 @@ async function main() {
         id: q.id,
         currentChapter: q.chapter || '',
         currentSubtopic: q.subtopic || '',
+        marks: typeof q.marks === 'number' ? q.marks : null,
         questionText: sanitizeMathText(q.textContent || '', 280),
         answerText: isPlaceholder ? '' : sanitizeMathText(ansRaw, 180),
       };
@@ -264,6 +283,7 @@ async function main() {
   // Apply results to store
   let typeUpdated = 0;
   let topicReclassified = 0;
+  let difficultyUpdated = 0;
   let qaMismatches = 0;
 
   for (const q of questions) {
@@ -275,6 +295,18 @@ async function main() {
       q.questionType = 'structured';
       typeUpdated++;
     }
+
+    const groqDifficulty = r?.difficulty as Difficulty | undefined;
+    const nextDifficulty: Difficulty =
+      groqDifficulty && VALID_DIFFICULTY.has(groqDifficulty)
+        ? groqDifficulty
+        : classifyDifficulty(
+            (q.subject || 'mathematics') as SubjectId,
+            q.textContent || '',
+            typeof q.marks === 'number' ? q.marks : null
+          );
+    if (q.difficulty !== nextDifficulty) difficultyUpdated++;
+    q.difficulty = nextDifficulty;
 
     if (r && r.chapter && CHAPTER_TO_TOPIC_ID[r.chapter] && r.subtopic && SUBTOPIC_TO_ID[r.subtopic]) {
       if (q.chapter !== r.chapter || q.subtopic !== r.subtopic) {
@@ -306,6 +338,7 @@ async function main() {
   console.log(`[✓] Groq Classification & Verification Complete:`);
   console.log(`    questionType assigned:  ${typeUpdated}`);
   console.log(`    chapter/subtopic fixed: ${topicReclassified}`);
+  console.log(`    difficulty updated:     ${difficultyUpdated}`);
   console.log(`    Q↔A mismatches flagged: ${qaMismatches}`);
   console.log('================================================================\n');
 }

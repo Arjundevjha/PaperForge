@@ -70,3 +70,22 @@ test('a migration adds questions.difficulty with an index', () => {
   assert.ok(migration, 'expected a migration adding questions.difficulty');
   assert.match(migration, /idx_questions_difficulty/);
 });
+
+test('groq.ts handles difficulty with heuristic fallback', () => {
+  const src = read('packages/classification/src/groq.ts');
+  assert.match(src, /difficulty/);
+  assert.match(src, /classifyDifficulty/);
+});
+
+test('offline Groq pipeline validates difficulty against EASY/MEDIUM/HARD', () => {
+  const src = read('scripts/classify_and_verify_groq.ts');
+  assert.match(src, /VALID_DIFFICULTY/);
+  assert.match(src, /'EASY'/);
+  assert.match(src, /'MEDIUM'/);
+  assert.match(src, /'HARD'/);
+});
+
+test('db-sync maps difficulty from Supabase rows into questions', () => {
+  const src = read('apps/web/src/lib/supabase/db-sync.ts');
+  assert.match(src, /difficulty: q\.difficulty \|\| undefined/);
+});
