@@ -66,3 +66,18 @@
 
 **Phase 2 next**: Syllabus analytics (`GET /api/analytics/syllabus` + `/analytics` page / SyllabusExplorer Coverage tab + CSV export).
 **Phase 3 next**: Difficulty tagging (`difficulty` on questions via classify_and_verify_groq.ts + DB migration + db-sync mapping + QuestionBankMatrix filter).
+
+---
+
+## 6. Difficulty Tagging — Phase 3 (Completed by subagent session `ses_df9154ab8ffe1DpKuD2iRhI1ld`, user took over at "option 2")
+
+**Loop**: Groq classifier (`scripts/classify_and_verify_groq.ts`) + `classifyWithGroq` (`packages/classification/src/groq.ts`, asks for `difficulty` + validates EASY/MEDIUM/HARD + `withDifficulty()` fallback) + heuristic (`classifyDifficulty` in `packages/classification/src/matcher.ts`) → `Question.difficulty` → db-sync maps to store → `/questions` bank shows a difficulty filter.
+
+- **Worktree:** `/Users/abc/.local/share/opencode/worktree/e1b211/phase3-difficulty-tagging` (committed, not pushed)
+- **Commits**: `ecd4107` chore(deps), `f27704d` types+validation+matcher, `57608fe` migration, `7a3cf97` groq+db-sync, `cbb12d0` UI filter
+- **Files**: `packages/shared/src/types.ts` (+Difficulty, +`difficulty?` on Question/Answer), `packages/shared/src/validation.ts` (+DifficultySchema), `packages/classification/src/matcher.ts` (+classifyDifficulty, difficulty on ClassificationResult), `packages/classification/src/groq.ts` (+rubric, validated difficulty, withDifficulty fallback), `packages/db/src/schema.ts` (+difficulty on questions), `packages/db/supabase/migrations/20261124000000_add_question_difficulty.sql` (column + idx_questions_difficulty), `scripts/classify_and_verify_groq.ts` (+VALID_DIFFICULTY, marks in payload, heuristic backfill, difficulty counters), `apps/web/src/lib/supabase/db-sync.ts` (+difficulty mapping), `apps/web/src/components/questions/QuestionBankMatrix.tsx` (All/EASY/MEDIUM/HARD select + filter + row badge), `docs/difficulty-tagging.md`, `tests/difficulty.test.mjs` (12 tests)
+- **Verification** (subagent-verified): `npm run test` 68/70 (2 pre-existing env failures: `tests/storage.test.mjs` — no `.env.local` in worktree, passes in main repo; `tests/diagnose.test.mjs` — pre-existing on main), `tsc --noEmit -p apps/web/tsconfig.json` clean, `npm run build` green (18 routes), `fallow` passes, Snyk 0 issues on new code (1 pre-existing MEDIUM DOMXSS in QuestionBankMatrix.tsx — same fingerprint on unmodified HEAD)
+- **Note**: live Supabase column + backfill of existing rows NOT applied (migration added only; apply when ready: `ALTER TABLE questions ADD COLUMN difficulty TEXT;`).
+- **Pending**: push (held for user approval).
+
+**Phase 2 next**: Syllabus analytics (owned by Phase 2 worktree — see below.)
