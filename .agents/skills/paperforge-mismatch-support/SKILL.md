@@ -1,17 +1,20 @@
 ---
 name: paperforge-mismatch-support
-description: Autonomous support & triage workflow for PaperForge `answer-mismatch` GitHub Issues. Polls open issues, consults learned mismatch patterns, fixes answer pairings/crops using local PDFs and scripts/, syncs to Supabase, and self-documents every fix into docs/mismatch-triage-log.md and docs/mismatch-patterns.md so future triage gets faster.
+description: Autonomous support & triage workflow for PaperForge `answer-mismatch` and `question-error` GitHub Issues. Polls open issues, consults learned mismatch patterns, fixes answer pairings/crops using local PDFs and scripts/, syncs to Supabase, and self-documents every fix into docs/mismatch-triage-log.md and docs/mismatch-patterns.md so future triage gets faster.
 ---
 
 # PaperForge Mismatch Support Skill
 
-Use this skill whenever triaging or running a scheduled support loop for PaperForge `answer-mismatch` GitHub Issues.
+Use this skill whenever triaging or running a scheduled support loop for PaperForge `answer-mismatch` GitHub Issues and `question-error` error-report Issues (Phase 1 of the error-report flow).
 
-## 1. Poll for Open Mismatch Issues
+## 1. Poll for Open Issues
 ```bash
 gh issue list --label answer-mismatch --state open --json number,title,body,createdAt
+gh issue list --label question-error --state open --json number,title,body,createdAt
 ```
-If the list is empty (`[]`), stop immediately without editing any files.
+If both lists are empty (`[]`), stop immediately without editing any files.
+
+Note: `question-error` issues come from the Teacher Resource Hub "Report Question" button (error kinds: `MISSING_QUESTION`, `WRONG_PAIRING`, `INCOMPLETE_ANSWER`, `TYPO`, `STALE_SCREENSHOT`, `MISC_ERROR`). They flow through the same review_item/fix loop; only `MISSING_QUESTION` items typically need manual triage (the question may not exist yet — verify against `papers/` first).
 
 ## 2. Consult Learned Knowledge First (Fast-Path)
 Before inspecting PDFs from scratch, **read**:
@@ -47,3 +50,8 @@ Comment with a concise summary of the root cause, fix, and verification, then cl
 ```bash
 gh issue close <number> --comment "Fixed: <root cause & fix>. Synced verified PNG to Supabase Storage & updated answers/review_items. Documented in docs/mismatch-triage-log.md."
 ```
+
+## 7. Error-Report Issues (`question-error`) — Same Loop, Different Branch
+- **MISSING_QUESTION**: Search `papers/h2_mathematics/` for the school/year/paper number. If the question is genuinely absent from the bank, note it in the triage log and close the issue: `gh issue close <n> --comment "Missing from bank (verified against <paper>)."` If present, ingest it (see `ingest_paper.ts`) and log.
+- **WRONG_PAIRING / INCOMPLETE_ANSWER / STALE_SCREENSHOT / TYPO / MISC_ERROR**: follow steps 3–4 as for mismatches (re-crop, AI-match or verify with Groq, Supabase sync of `answers` / `review_items`), then close the issue per step 6, noting the source as GitHub issue `question-error`.
+- Every error-report fix appends to `docs/mismatch-triage-log.md`; add any new reusable pattern to `docs/mismatch-patterns.md`.
