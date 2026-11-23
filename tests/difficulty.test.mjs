@@ -89,3 +89,9 @@ test('db-sync maps difficulty from Supabase rows into questions', () => {
   const src = read('apps/web/src/lib/supabase/db-sync.ts');
   assert.match(src, /difficulty: q\.difficulty \|\| undefined/);
 });
+
+test('question bank matrix exposes a difficulty filter', () => {
+  const src = read('apps/web/src/components/questions/QuestionBankMatrix.tsx');
+  assert.match(src, /selectedDifficulty/);
+  assert.match(src, /q\.difficulty/);
+});
