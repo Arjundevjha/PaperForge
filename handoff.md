@@ -47,3 +47,22 @@
 - **Required Secrets**:
   - **Vercel**: `GITHUB_DISPATCH_TOKEN` (fine-grained PAT with `Issues: write` — and `Actions: write` if using cloud dispatch — on `Arjundevjha/PaperForge`).
   - **GitHub Repo Secrets** *(only if using the GitHub Actions fallback)*: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GROQ_API_KEY`.
+
+---
+
+## 5. Error-Report Flow — Phase 1 (Added Nov 23, 2026)
+
+**Loop**: Teacher Resource Hub "Report Question" → `POST /api/report-question` → PENDING `review_items` (`issue_type=ERROR_REPORT`) → GitHub issue labeled `question-error` → `scripts/fix_flagged_answer.py --sweep` sweeps `issue_type IN (MISMATCH_FLAGGED, ERROR_REPORT)`.
+
+- **Schema/types (M1 `b1907c9`)**: `ReviewIssueType` += `ERROR_REPORT`; `ReportErrorKind`; `ReportQuestionPayloadSchema` (`questionId`, `answerId?`, `errorKind` default `MISC_ERROR`, `reason`).
+- **API + shared lib (M2 `5fbda40`)**: New `apps/web/src/app/api/report-question/route.ts` (`POST` — validates payload, creates/upserts PENDING review item to Supabase, opens `question-error` issue via shared `apps/web/src/lib/github-issue.ts` `createGitHubIssue`; mismatch route now delegates to the shared lib — behavior unchanged).
+- **Hub button (M3 `9761505`)**: "Report Question" button on the Answer Pairing & Verification Strip + inline panel (error kinds `MISSING_QUESTION | WRONG_PAIRING | INCOMPLETE_ANSWER | TYPO | STALE_SCREENSHOT | MISC_ERROR` + optional note → `handleReportQuestion` → `/api/report-question`).
+- **Agent sweep (M4 `b50847c`)**: `fix_flagged_answer.py` `--sweep` query: `or=(issue_type.eq.MISMATCH_FLAGGED,issue_type.eq.ERROR_REPORT)`; reason note uses `details.errorKind`; `MISSING_QUESTION` items still short-circuit to queue.
+- **Docs (M5 `4d382a2`)**: `.agents/skills/paperforge-mismatch-support/SKILL.md` polls both issue labels; new section 7 (error reports — `MISSING_QUESTION` manual triage vs re-crop flow).
+- **Tests**: `tests/report_question.test.mjs` — 11/11 pass.
+- **Security**: Snyk Code scan 0 issues on new/changed code; 2 pre-existing MEDIUM DOMXSS findings on `TeacherResourceHub.tsx` `<img src={getQuestionImageUrl/getAnswerImageUrl(...)}>` lines — noted, left untouched (not introduced by this phase).
+- **Verification**: `npm test` 57/58 (1 pre-existing env failure: `tests/diagnose.test.mjs:21` Desktop deliverable PDF — same as before this phase); `tsc --noEmit` clean; `npm run build` clean (M3); graphify updated.
+- **NOT pushed to remote** (continuation of the earlier push-hold: `git push` held pending user approval).
+
+**Phase 2 next**: Syllabus analytics (`GET /api/analytics/syllabus` + `/analytics` page / SyllabusExplorer Coverage tab + CSV export).
+**Phase 3 next**: Difficulty tagging (`difficulty` on questions via classify_and_verify_groq.ts + DB migration + db-sync mapping + QuestionBankMatrix filter).
