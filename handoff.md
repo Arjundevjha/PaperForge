@@ -64,5 +64,5 @@
 - **Verification**: `npm test` 57/58 (1 pre-existing env failure: `tests/diagnose.test.mjs:21` Desktop deliverable PDF — same as before this phase); `tsc --noEmit` clean; `npm run build` clean (M3); graphify updated.
 - **NOT pushed to remote** (continuation of the earlier push-hold: `git push` held pending user approval).
 
-**Phase 2 next**: Syllabus analytics (`GET /api/analytics/syllabus` + `/analytics` page / SyllabusExplorer Coverage tab + CSV export).
-**Phase 3 next**: Difficulty tagging (`difficulty` on questions via classify_and_verify_groq.ts + DB migration + db-sync mapping + QuestionBankMatrix filter).
+**Phase 2 next**: Syllabus analytics — DONE in worktree `phase2-syllabus-analytics` (branch from main, committed, not pushed): `GET /api/analytics/syllabus` + `GET /api/analytics/syllabus/export` (CSV) + `/analytics` page (`SyllabusCoverage` component); see its `handoff.md` (commits `a7dd783`, `22aafc8`, `9cec868`, `9031219`).
+**Phase 3 next**: Difficulty tagging (`difficulty` on questions via classify_and_verify_groq.ts + DB migration + db-sync mapping + QuestionBankMatrix filter) — DONE in worktree `phase3-difficulty-tagging` (branch from main, committed, not pushed); see its `handoff.md` (commits `ecd4107`, `f27704d`, `57608fe`, `7a3cf97`, `cbb12d0`).
