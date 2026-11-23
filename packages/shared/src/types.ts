@@ -140,6 +140,9 @@ export interface QuestionProvenance {
 
 export type QuestionStatus = 'DRAFT' | 'READY' | 'PUBLISHED' | 'FLAGGED' | 'EXCLUDED';
 
+/** Perceived cognitive demand of a question, used for filtered practice sets. */
+export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
+
 export type QuestionType =
   | 'structured'
   | 'proof'
@@ -166,6 +169,7 @@ export interface Question {
   subtopic?: string | null;
   subtopicId?: string | null;
   questionType?: QuestionType;
+  difficulty?: Difficulty | null;
   syllabusVersionId: string;
   textContent: string;
   marks?: number | null;
@@ -193,6 +197,7 @@ export interface Answer {
   questionId: string;
   questionNumber: string;
   questionType?: QuestionType;
+  difficulty?: Difficulty | null;
   topicId?: string | null;
   subtopicId?: string | null;
   solutionSourceId?: string | null;

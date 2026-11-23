@@ -33,6 +33,7 @@ export const questionsTable = pgTable('questions', {
   subtopic: text('subtopic'),
   subtopicId: text('subtopic_id'),
   questionType: text('question_type'),
+  difficulty: text('difficulty'),
   syllabusVersionId: text('syllabus_version_id').notNull(),
   textContent: text('text_content').notNull(),
   marks: integer('marks'),

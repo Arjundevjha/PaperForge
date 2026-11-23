@@ -4,10 +4,23 @@
  */
 
 import { SubjectId, SINGAPORE_A_LEVEL_SYLLABI } from '@paperforge/shared';
-import { ClassificationResult, classifyQuestionContent } from './matcher';
+import { ClassificationResult, classifyDifficulty, classifyQuestionContent } from './matcher';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
+const DIFFICULTY_LEVELS = new Set(['EASY', 'MEDIUM', 'HARD']);
+
+/** Attaches a difficulty tag, defaulting to the deterministic heuristic. */
+function withDifficulty(
+  result: ClassificationResult,
+  subject: SubjectId,
+  textContent: string
+): ClassificationResult {
+  return {
+    ...result,
+    difficulty: result.difficulty ?? classifyDifficulty(subject, textContent),
+  };
+}
 
 /**
  * Global promise queue to serialize and stagger requests to Groq Cloud.
@@ -80,12 +93,12 @@ export async function classifyWithGroq(
 
   // Graceful fallback to deterministic matcher if key is missing
   if (!effectiveKey) {
-    return classifyQuestionContent(subject, textContent);
+    return withDifficulty(classifyQuestionContent(subject, textContent), subject, textContent);
   }
 
   const cleanText = sanitizeForLLM(textContent);
   if (cleanText.length < 15) {
-    return classifyQuestionContent(subject, textContent);
+    return withDifficulty(classifyQuestionContent(subject, textContent), subject, textContent);
   }
 
   // Build taxonomy specification for the prompt
@@ -100,6 +113,11 @@ Your task is to accurately classify an examination question into EXACTLY ONE off
 OFFICIAL SYLLABUS TAXONOMY:
 ${taxonomySpec}
 
+DIFFICULTY RUBRIC (also return "difficulty"):
+- EASY: single-step recall/substitution, one formula, typically <= 4 marks.
+- MEDIUM: multi-step but scaffolded, typical 4-6 mark H2 question.
+- HARD: formal proof ("prove", "show that", "hence/deduce"), heavy calculus, 3D vectors/planes, synthesis across topics, typically 5+ marks.
+
 CRITICAL MATHEMATICAL CLASSIFICATION RULES:
 1. If the question involves integration notation (∫, \\int, dx without dy/dx, substitution u = f(x), integration by parts, partial fractions, definite integrals, area between curves, volume of revolution), it belongs to "Integration Techniques" or "Definite Integrals and Applications" under Calculus. It is NEVER "Differentiation Techniques".
 2. If the question asks for dy/dx, second derivatives, equations of tangents, normals, stationary points, or connected rates of change, it belongs to "Differentiation Techniques" or "Applications of Differentiation" under Calculus.
@@ -113,6 +131,7 @@ Respond ONLY with a valid JSON object matching this structure:
   "subtopicId": "<Exact subtopic id, e.g. math-05-04>",
   "subtopicName": "<Exact subtopic name, e.g. Integration Techniques>",
   "confidence": <number between 0.0 and 1.0>,
+  "difficulty": "EASY" | "MEDIUM" | "HARD",
   "reason": "<one sentence explaining the primary mathematical reason for this classification>"
 }`;
 
@@ -178,7 +197,7 @@ Respond ONLY with a valid JSON object matching this structure:
     });
 
     if (!rawContent) {
-      return classifyQuestionContent(subject, textContent);
+      return withDifficulty(classifyQuestionContent(subject, textContent), subject, textContent);
     }
 
     const parsed = JSON.parse(rawContent);
@@ -189,7 +208,7 @@ Respond ONLY with a valid JSON object matching this structure:
     );
 
     if (!matchedChapter) {
-      return classifyQuestionContent(subject, textContent);
+      return withDifficulty(classifyQuestionContent(subject, textContent), subject, textContent);
     }
 
     // Match subtopic
@@ -210,10 +229,13 @@ Respond ONLY with a valid JSON object matching this structure:
       confidence: parseFloat(confidence.toFixed(2)),
       matchedKeywords: ['groq-llama-qwen-classification'],
       needsReview,
+      difficulty: DIFFICULTY_LEVELS.has(parsed.difficulty)
+        ? parsed.difficulty
+        : classifyDifficulty(subject, textContent),
       reason: parsed.reason || 'Classified via Groq Cloud LLM',
     };
   } catch (err) {
     console.warn('[Groq Classifier] Request failed, falling back to deterministic matcher:', err);
-    return classifyQuestionContent(subject, textContent);
+    return withDifficulty(classifyQuestionContent(subject, textContent), subject, textContent);
   }
 }

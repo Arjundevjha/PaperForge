@@ -65,7 +65,7 @@
 - **NOT pushed to remote** (continuation of the earlier push-hold: `git push` held pending user approval).
 
 **Phase 2 next**: Syllabus analytics — DONE in main (branch `phase2-syllabus-analytics`, commits `a7dd783`, `22aafc8`, `9cec868`, `9031219`).
-**Phase 3 next**: Difficulty tagging (`difficulty` on questions via classify_and_verify_groq.ts + DB migration + db-sync mapping + QuestionBankMatrix filter) — DONE in worktree `phase3-difficulty-tagging` (branch from main, committed, not pushed); see its `handoff.md` (commits `ecd4107`, `f27704d`, `57608fe`, `7a3cf97`, `cbb12d0`).
+**Phase 3 next**: Difficulty tagging (`difficulty` on questions via classify_and_verify_groq.ts + DB migration + db-sync mapping + QuestionBankMatrix filter) — DONE in main (branch `phase3-difficulty-tagging`, commits `ecd4107`, `f27704d`, `57608fe`, `7a3cf97`, `cbb12d0`).
 
 ---
 
@@ -78,4 +78,14 @@
 - **Notes**: component initially used wrong Tailwind tokens (`border-border-subdued` → `border-subdued`) — fixed. `Question.subtopicId` primary, keyword-overlap fallback via syllabus `keywords[]`.
 - **Status**: merged into main (not yet pushed — `git push` held pending user approval).
 
-**Phase 2 done. Next: Phase 3** (owned by the separate `phase3-difficulty-tagging` worktree — sibling session).
+---
+
+## 6. Difficulty Tagging — Phase 3 (Completed by subagent session `ses_df9154ab8ffe1DpKuD2iRhI1ld`; merged into main)
+
+**Loop**: Groq classifier (`scripts/classify_and_verify_groq.ts`) + `classifyWithGroq` (`packages/classification/src/groq.ts`, asks for `difficulty` + validates EASY/MEDIUM/HARD + `withDifficulty()` fallback) + heuristic (`classifyDifficulty` in `packages/classification/src/matcher.ts`) → `Question.difficulty` → db-sync maps to store → `/questions` bank shows a difficulty filter.
+
+- **Commits**: `ecd4107` chore(deps), `f27704d` types+validation+matcher, `57608fe` migration, `7a3cf97` groq+db-sync, `cbb12d0` UI filter
+- **Files**: `packages/shared/src/types.ts` (+Difficulty, +`difficulty?` on Question/Answer), `packages/shared/src/validation.ts` (+DifficultySchema), `packages/classification/src/matcher.ts` (+classifyDifficulty, difficulty on ClassificationResult), `packages/classification/src/groq.ts` (+rubric, validated difficulty, withDifficulty fallback), `packages/db/src/schema.ts` (+difficulty on questions), `packages/db/supabase/migrations/20261124000000_add_question_difficulty.sql` (column + idx_questions_difficulty), `scripts/classify_and_verify_groq.ts` (+VALID_DIFFICULTY, marks in payload, heuristic backfill, difficulty counters), `apps/web/src/lib/supabase/db-sync.ts` (+difficulty mapping), `apps/web/src/components/questions/QuestionBankMatrix.tsx` (All/EASY/MEDIUM/HARD select + filter + row badge), `docs/difficulty-tagging.md`, `tests/difficulty.test.mjs` (12 tests)
+- **Verification** (subagent-verified): `npm run test` 68/70 (2 pre-existing env failures: `tests/storage.test.mjs` — no `.env.local` in worktree, passes in main repo; `tests/diagnose.test.mjs` — pre-existing on main), `tsc --noEmit -p apps/web/tsconfig.json` clean, `npm run build` green (18 routes), `fallow` passes, Snyk 0 issues on new code (1 pre-existing MEDIUM DOMXSS in QuestionBankMatrix.tsx — same fingerprint on unmodified HEAD)
+- **Note**: live Supabase column + backfill of existing rows NOT applied (migration added only; apply when ready: `ALTER TABLE questions ADD COLUMN difficulty TEXT;`).
+- **Status**: merged into main (not yet pushed — `git push` held pending user approval).

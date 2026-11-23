@@ -35,6 +35,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedSchool, setSelectedSchool] = useState<string>('all');
   const [selectedChapter, setSelectedChapter] = useState<string>('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [reclassifyingQuestion, setReclassifyingQuestion] = useState<Question | null>(null);
 
@@ -67,6 +68,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
     if (selectedSubject !== 'all' && q.subject !== selectedSubject) return false;
     if (selectedChapter !== 'all' && q.chapter !== selectedChapter) return false;
     if (selectedSchool !== 'all' && q.provenance.school !== selectedSchool) return false;
+    if (selectedDifficulty !== 'all' && q.difficulty !== selectedDifficulty) return false;
     if (search) {
       const query = search.toLowerCase();
       return (
@@ -152,7 +154,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
             })}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {/* Search Input */}
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3 top-2.5 text-[#94a3b8]" />
@@ -195,6 +197,19 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
                 </option>
               ))}
             </select>
+
+            {/* Difficulty Filter */}
+            <select
+              value={selectedDifficulty}
+              onChange={(e) => setSelectedDifficulty(e.target.value)}
+              aria-label="Filter questions by difficulty"
+              className="bg-surface-2 border border-border-subdued rounded px-3 py-1.5 text-xs text-[#dee2f1] focus:outline-none"
+            >
+              <option value="all">All Difficulties</option>
+              <option value="EASY">EASY</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HARD">HARD</option>
+            </select>
           </div>
         </div>
 
@@ -214,6 +229,7 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
                       setSelectedSubject('all');
                       setSelectedSchool('all');
                       setSelectedChapter('all');
+                      setSelectedDifficulty('all');
                       setSearch('');
                     }}
                     className="px-3 py-1.5 rounded bg-primary-cyan text-[#090e18] text-xs font-semibold hover:bg-primary-hover transition-all"
@@ -258,11 +274,26 @@ export const QuestionBankMatrix: React.FC<QuestionBankMatrixProps> = ({
                         {q.provenance.citation}
                       </span>
                     </div>
-                    {q.marks && (
-                      <span className="font-mono text-xs text-[#cbd5e1] font-semibold">
-                        [{q.marks}m]
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {q.difficulty && (
+                        <span
+                          className={`font-mono text-[10px] px-1.5 py-0.5 rounded border ${
+                            q.difficulty === 'HARD'
+                              ? 'text-amber-300 border-amber-400/40 bg-amber-400/10'
+                              : q.difficulty === 'MEDIUM'
+                                ? 'text-primary-cyan border-primary-cyan/30 bg-[#091822]'
+                                : 'text-status-approved border-status-approved/30 bg-[#0c1815]'
+                          }`}
+                        >
+                          {q.difficulty}
+                        </span>
+                      )}
+                      {q.marks && (
+                        <span className="font-mono text-xs text-[#cbd5e1] font-semibold">
+                          [{q.marks}m]
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <p className="text-xs text-[#cbd5e1] line-clamp-2 leading-relaxed">
