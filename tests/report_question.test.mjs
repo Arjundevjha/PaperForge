@@ -92,3 +92,10 @@ test('TeacherResourceHub report panel offers error-report kinds and a send butto
   assert.match(src, /STALE_SCREENSHOT/);
   assert.match(src, /Send Report/);
 });
+
+test('fix_flagged_answer.py --sweep also sweeps ERROR_REPORT items', () => {
+  const src = read('scripts/fix_flagged_answer.py');
+  assert.match(src, /issue_type\.eq\.ERROR_REPORT/);
+  assert.match(src, /issue_type\.eq\.MISMATCH_FLAGGED/);
+  assert.match(src, /--sweep/);
+});

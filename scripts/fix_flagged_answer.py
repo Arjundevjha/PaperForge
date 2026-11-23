@@ -10,6 +10,10 @@ Workflow per flagged item:
    exact question number with PyMuPDF, upload to `answers/<question_id>.png`, and mark VERIFIED.
 3. Otherwise, use Groq to check whether a nearby/same-school candidate answer matches, or
    generate an AI worked-solution diagnosis in `review_items.details`.
+
+This loop also sweeps `ERROR_REPORT` review items (teacher/student error reports):
+missing questions are queued for manual triage, while diagram/answer errors go
+through the same re-crop and AI-match flow as mismatches.
 """
 
 import argparse
@@ -353,7 +357,11 @@ def main() -> int:
     parser.add_argument("--question-id", default=os.environ.get("QUESTION_ID", "").strip())
     parser.add_argument("--review-item-id", default=os.environ.get("REVIEW_ITEM_ID", "").strip())
     parser.add_argument("--reason", default=os.environ.get("FLAG_REASON", "Flagged answer mismatch").strip())
-    parser.add_argument("--sweep", action="store_true", help="Process all PENDING MISMATCH_FLAGGED items")
+    parser.add_argument(
+        "--sweep",
+        action="store_true",
+        help="Process all PENDING MISMATCH_FLAGGED and ERROR_REPORT items",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Inspect without mutating Supabase")
     args = parser.parse_args()
 
@@ -394,15 +402,22 @@ def main() -> int:
             )
         )
     else:
+        # Sweep all PENDING answer-mismatch flags AND teacher/student error reports.
         pending = sb.get(
             "review_items",
-            {"status": "eq.PENDING", "issue_type": "eq.MISMATCH_FLAGGED", "select": "*", "limit": "25"},
+            {
+                "status": "eq.PENDING",
+                "or": "(issue_type.eq.MISMATCH_FLAGGED,issue_type.eq.ERROR_REPORT)",
+                "select": "*",
+                "limit": "25",
+            },
         )
         for item in pending:
-            qid = (item.get("details") or {}).get("questionId") or item.get("entity_id")
+            details = item.get("details") or {}
+            qid = details.get("questionId") or item.get("entity_id")
             if not qid:
                 continue
-            reason = (item.get("details") or {}).get("reason") or "Flagged mismatch"
+            reason = details.get("reason") or f"Flagged: {details.get('errorKind', 'MISMATCH_FLAGGED')}"
             results.append(
                 process_flagged_item(sb, groq_key, qid, item, reason, dry_run=args.dry_run)
             )
