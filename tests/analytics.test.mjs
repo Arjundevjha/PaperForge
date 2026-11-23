@@ -10,6 +10,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+function read(relPath) {
+  return readFileSync(path.join(repoRoot, relPath), 'utf8');
+}
+
 function makeQuestion(overrides) {
   const q = overrides || {};
   return {
@@ -149,4 +153,20 @@ test('buildSyllabusCoverageCsv emits header and per-subtopic rows', () => {
   assert.ok(lines.length > 1);
   assert.ok(lines.some((l) => l.includes('math-01-01') && l.includes('true')));
   assert.ok(lines.some((l) => l.includes('math-02-01') && l.includes('false')));
+});
+
+test('GET /api/analytics/syllabus route exists and computes coverage', () => {
+  const src = read('apps/web/src/app/api/analytics/syllabus/route.ts');
+  assert.match(src, /export async function GET/);
+  assert.match(src, /computeSyllabusCoverage/);
+  assert.match(src, /SubjectIdSchema/);
+  assert.match(src, /syncAllQuestionsFromDb/);
+});
+
+test('GET /api/analytics/syllabus/export route exists and returns text/csv', () => {
+  const src = read('apps/web/src/app/api/analytics/syllabus/export/route.ts');
+  assert.match(src, /export async function GET/);
+  assert.match(src, /text\/csv/);
+  assert.match(src, /buildSyllabusCoverageCsv/);
+  assert.match(src, /subject/);
 });
