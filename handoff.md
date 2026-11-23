@@ -64,5 +64,18 @@
 - **Verification**: `npm test` 57/58 (1 pre-existing env failure: `tests/diagnose.test.mjs:21` Desktop deliverable PDF — same as before this phase); `tsc --noEmit` clean; `npm run build` clean (M3); graphify updated.
 - **NOT pushed to remote** (continuation of the earlier push-hold: `git push` held pending user approval).
 
-**Phase 2 next**: Syllabus analytics — DONE in worktree `phase2-syllabus-analytics` (branch from main, committed, not pushed): `GET /api/analytics/syllabus` + `GET /api/analytics/syllabus/export` (CSV) + `/analytics` page (`SyllabusCoverage` component); see its `handoff.md` (commits `a7dd783`, `22aafc8`, `9cec868`, `9031219`).
+**Phase 2 next**: Syllabus analytics — DONE in main (branch `phase2-syllabus-analytics`, commits `a7dd783`, `22aafc8`, `9cec868`, `9031219`).
 **Phase 3 next**: Difficulty tagging (`difficulty` on questions via classify_and_verify_groq.ts + DB migration + db-sync mapping + QuestionBankMatrix filter) — DONE in worktree `phase3-difficulty-tagging` (branch from main, committed, not pushed); see its `handoff.md` (commits `ecd4107`, `f27704d`, `57608fe`, `7a3cf97`, `cbb12d0`).
+
+---
+
+## 5. Syllabus Analytics — Phase 2 (merged into main)
+
+**Loop**: `GET /api/analytics/syllabus?subject=` (server: syncAllQuestionsFromDb + computeSyllabusCoverage) → `SyllabusCoverage` component on `/analytics` (AppShell) renders overall coverage + per-chapter cards + gap chips + CSV download via `GET /api/analytics/syllabus/export?subject=` (text/csv attachment).
+
+- **Files**: `packages/shared/src/analytics.ts` (computeSyllabusCoverage, buildSyllabusCoverageCsv, SyllabusCoverageResult types), `apps/web/src/app/api/analytics/syllabus/route.ts`, `apps/web/src/app/api/analytics/syllabus/export/route.ts`, `apps/web/src/app/analytics/page.tsx`, `apps/web/src/components/analytics/SyllabusCoverage.tsx`, `docs/analytics.md`
+- **Verification**: `npx tsx --test tests/analytics.test.mjs` 7/7; `npx tsc -p apps/web/tsconfig.json` clean; `npm run build` green; `npm test` in worktree 63/65 (2 pre-existing/environmental: `tests/diagnose.test.mjs` Desktop PDF + `tests/storage.test.mjs` missing `.env.local` — same categories as Phase 1/3, both pass in the parent repo); Snyk Code: 0 issues on new code.
+- **Notes**: component initially used wrong Tailwind tokens (`border-border-subdued` → `border-subdued`) — fixed. `Question.subtopicId` primary, keyword-overlap fallback via syllabus `keywords[]`.
+- **Status**: merged into main (not yet pushed — `git push` held pending user approval).
+
+**Phase 2 done. Next: Phase 3** (owned by the separate `phase3-difficulty-tagging` worktree — sibling session).
