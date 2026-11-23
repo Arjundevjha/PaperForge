@@ -60,3 +60,13 @@ test('matcher.ts exports the classifyDifficulty heuristic and difficulty field',
   assert.match(src, /export function classifyDifficulty/);
   assert.match(src, /difficulty\?: Difficulty/);
 });
+
+test('a migration adds questions.difficulty with an index', () => {
+  const dir = path.join(repoRoot, 'packages/db/supabase/migrations');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql'));
+  const migration = files
+    .map((f) => fs.readFileSync(path.join(dir, f), 'utf8'))
+    .find((sql) => /ALTER TABLE public\.questions\s+ADD COLUMN IF NOT EXISTS difficulty TEXT/i.test(sql));
+  assert.ok(migration, 'expected a migration adding questions.difficulty');
+  assert.match(migration, /idx_questions_difficulty/);
+});
