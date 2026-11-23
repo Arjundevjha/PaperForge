@@ -109,6 +109,22 @@ export const ReviewFlagPayloadSchema = z.object({
   verificationStatus: AnswerVerificationStatusSchema.optional().default('MISMATCH_FLAGGED'),
 });
 
+export const ReportErrorKindSchema = z.enum([
+  'MISSING_QUESTION',
+  'WRONG_PAIRING',
+  'INCOMPLETE_ANSWER',
+  'TYPO',
+  'STALE_SCREENSHOT',
+  'MISC_ERROR',
+]);
+
+export const ReportQuestionPayloadSchema = z.object({
+  questionId: z.string().min(1),
+  answerId: z.string().optional(),
+  errorKind: ReportErrorKindSchema.optional().default('MISC_ERROR'),
+  reason: z.string().max(500).optional(),
+});
+
 export const QuestionReclassifyPayloadSchema = z.object({
   questionId: z.string().min(1),
   chapter: z.string().min(1),

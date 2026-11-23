@@ -259,7 +259,17 @@ export type ReviewIssueType =
   | 'UNMATCHED_ANSWER'
   | 'UNCERTAIN_CLASSIFICATION'
   | 'POSSIBLE_DUPLICATE'
-  | 'MISMATCH_FLAGGED';
+  | 'MISMATCH_FLAGGED'
+  | 'ERROR_REPORT';
+
+/** Kinds of question-quality problems submitted via the Error Report flow. */
+export type ReportErrorKind =
+  | 'MISSING_QUESTION'
+  | 'WRONG_PAIRING'
+  | 'INCOMPLETE_ANSWER'
+  | 'TYPO'
+  | 'STALE_SCREENSHOT'
+  | 'MISC_ERROR';
 
 export interface ReviewItem {
   id: string;
