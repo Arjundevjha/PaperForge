@@ -84,6 +84,8 @@ export const QuestionTypeSchema = z.enum([
   'counting_probability',
 ]);
 
+export const DifficultySchema = z.enum(['EASY', 'MEDIUM', 'HARD']);
+
 export const AnswerVerificationStatusSchema = z.enum([
   'VERIFIED',
   'AUTO_MATCHED',

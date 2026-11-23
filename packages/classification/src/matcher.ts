@@ -3,7 +3,13 @@
  * Maps examination questions strictly into configured Singapore-Cambridge syllabi
  */
 
-import { SubjectId, SINGAPORE_A_LEVEL_SYLLABI, SyllabusChapter, SyllabusSubtopic } from '@paperforge/shared';
+import {
+  Difficulty,
+  SubjectId,
+  SINGAPORE_A_LEVEL_SYLLABI,
+  SyllabusChapter,
+  SyllabusSubtopic,
+} from '@paperforge/shared';
 
 export interface ClassificationResult {
   subject: SubjectId;
@@ -16,6 +22,55 @@ export interface ClassificationResult {
   matchedKeywords: string[];
   needsReview: boolean;
   reason: string;
+  difficulty?: Difficulty;
+}
+
+const PROOF_LANGUAGE = /\b(prove|proof|show that|deduce|hence)\b/;
+
+/**
+ * Deterministic difficulty heuristic used as the fallback for (and a sanity
+ * anchor beside) the Groq classifier. Pure function: no I/O, no clock.
+ */
+export function classifyDifficulty(
+  subject: SubjectId,
+  textContent: string,
+  marks?: number | null
+): Difficulty {
+  const text = (textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const length = text.length;
+  const markValue = typeof marks === 'number' && Number.isFinite(marks) ? marks : 0;
+
+  const signals = [
+    /∫|\\int\b|\bintegrat/.test(text),                          // integration
+    /\blimits?\b|\bconverge|\basymptote/.test(text),             // limits/behaviour
+    /\b3\s*-?\s*d\b|\bplane\b|\bvector/.test(text),            // 3D vectors/planes
+    /\bprove\b|\bproof\b|\binduction\b/.test(text),             // formal proof
+    /\bhence\b|\bd\s*educe\b|\bdirectly from/.test(text),       // chained reasoning
+    /\bshow that\b/.test(text),
+    /\bprobability\b|\bdistribution\b|\bhypothesis\b/.test(text),
+    /\bcomplex number|\bargand|\bmodulus\b|\broot of\b/.test(text),
+  ].filter(Boolean).length;
+
+  if ((markValue >= 5 && PROOF_LANGUAGE.test(text)) || markValue >= 9) {
+    return 'HARD';
+  }
+  if (signals >= 4) {
+    return 'HARD';
+  }
+  if (signals === 3 && length > 220) {
+    return 'HARD';
+  }
+
+  // Short, low-signal stems with small mark allocations are the EASY band.
+  const shortStemLimit = subject === 'mathematics' ? 170 : 220;
+  if (markValue > 0 && markValue <= 4 && signals <= 1 && length <= shortStemLimit) {
+    return 'EASY';
+  }
+  if (markValue === 0 && signals === 0 && length <= 120) {
+    return 'EASY';
+  }
+
+  return 'MEDIUM';
 }
 
 export function classifyQuestionContent(
