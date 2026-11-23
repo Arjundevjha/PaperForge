@@ -125,6 +125,9 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
   const [flaggingQuestionId, setFlaggingQuestionId] = useState<string | null>(null);
   const [flagReason, setFlagReason] = useState<string>('');
   const [isSubmittingFlag, setIsSubmittingFlag] = useState<boolean>(false);
+  const [reportQuestionId, setReportQuestionId] = useState<string | null>(null);
+  const [reportNote, setReportNote] = useState<string>('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState<boolean>(false);
 
   // React-state image fallback tracking (replaces document.getElementById)
   const [failedQuestionImages, setFailedQuestionImages] = useState<Set<string>>(new Set());
@@ -230,6 +233,46 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
       setTimeout(() => setReclassifyNotification(null), 5000);
     } finally {
       setIsSubmittingFlag(false);
+    }
+  };
+
+  const handleReportQuestion = async (
+    q: Question,
+    ans: Answer | undefined,
+    errorKind: string,
+    reason: string
+  ) => {
+    setIsSubmittingReport(true);
+    try {
+      const res = await fetch('/api/report-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: q.id,
+          answerId: ans?.id,
+          errorKind,
+          reason: reason.trim() || `Reported from Teacher Resource Hub (${errorKind})`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to submit error report');
+      }
+      setReportQuestionId(null);
+      setReportNote('');
+      if (data.issueCreated && data.issueNumber) {
+        setReclassifyNotification(
+          `Reported ${q.provenance?.citation || q.id} • GitHub Issue #${data.issueNumber} opened`
+        );
+      } else {
+        setReclassifyNotification(`Reported ${q.provenance?.citation || q.id}`);
+      }
+      setTimeout(() => setReclassifyNotification(null), 5000);
+    } catch (err: any) {
+      setReclassifyNotification(err?.message || 'Failed to report question');
+      setTimeout(() => setReclassifyNotification(null), 5000);
+    } finally {
+      setIsSubmittingReport(false);
     }
   };
 
@@ -996,6 +1039,17 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                                 </button>
                                 <button
                                   type="button"
+                                  disabled={isSubmittingFlag}
+                                  onClick={() => {
+                                    setReportQuestionId((prev) => (prev === q.id ? null : q.id));
+                                    setReportNote('');
+                                  }}
+                                  className="text-[10px] font-mono text-amber-700 hover:text-amber-900 hover:underline cursor-pointer disabled:opacity-50"
+                                >
+                                  Report Question
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => setReclassifyingQuestion(q)}
                                   className="text-[10px] font-mono text-sky-700 hover:text-sky-900 hover:underline cursor-pointer"
                                 >
@@ -1040,6 +1094,48 @@ export const TeacherResourceHub: React.FC<TeacherResourceHubProps> = ({
                                   className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-mono font-semibold cursor-pointer disabled:opacity-50"
                                 >
                                   {isSubmittingFlag ? 'Sending...' : 'Flag & Run Agent'}
+                                </button>
+                              </div>
+                            )}
+
+                            {reportQuestionId === q.id && (
+                              <div className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap items-center gap-1.5">
+                                {(
+                                  [
+                                    'MISSING_QUESTION',
+                                    'WRONG_PAIRING',
+                                    'INCOMPLETE_ANSWER',
+                                    'TYPO',
+                                    'STALE_SCREENSHOT',
+                                    'MISC_ERROR',
+                                  ] as const
+                                ).map((kind) => (
+                                  <button
+                                    key={kind}
+                                    type="button"
+                                    disabled={isSubmittingReport}
+                                    onClick={() => handleReportQuestion(q, ans, kind, reportNote)}
+                                    className="px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-mono cursor-pointer disabled:opacity-50"
+                                  >
+                                    {kind.replace(/_/g, ' ')}
+                                  </button>
+                                ))}
+                                <input
+                                  type="text"
+                                  value={reportNote}
+                                  onChange={(e) => setReportNote(e.target.value)}
+                                  placeholder="Optional note..."
+                                  className="flex-1 min-w-[120px] px-2 py-0.5 rounded border border-slate-300 bg-white text-[10px] text-slate-800 focus:outline-none focus:border-amber-400"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isSubmittingReport}
+                                  onClick={() =>
+                                    handleReportQuestion(q, ans, 'MISC_ERROR', reportNote)
+                                  }
+                                  className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white text-[9px] font-mono font-semibold cursor-pointer disabled:opacity-50"
+                                >
+                                  {isSubmittingReport ? 'Sending...' : 'Send Report'}
                                 </button>
                               </div>
                             )}

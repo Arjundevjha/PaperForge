@@ -77,3 +77,18 @@ test('review route delegates to the shared github-issue lib', () => {
   assert.match(src, /createGitHubIssue/);
   assert.match(src, /triggerGitHubAgent/);
 });
+
+test('TeacherResourceHub strip has a Report Question button wired to POST /api/report-question', () => {
+  const src = read('apps/web/src/components/hub/TeacherResourceHub.tsx');
+  assert.match(src, /Report Question/);
+  assert.match(src, /api\/report-question/);
+  assert.match(src, /handleReportQuestion/);
+});
+
+test('TeacherResourceHub report panel offers error-report kinds and a send button', () => {
+  const src = read('apps/web/src/components/hub/TeacherResourceHub.tsx');
+  assert.match(src, /WRONG_PAIRING/);
+  assert.match(src, /INCOMPLETE_ANSWER/);
+  assert.match(src, /STALE_SCREENSHOT/);
+  assert.match(src, /Send Report/);
+});
