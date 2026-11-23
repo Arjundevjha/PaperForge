@@ -7,6 +7,7 @@ import {
 } from '@paperforge/shared';
 import { getCurrentUser } from '../../../lib/auth';
 import { getSupabaseAdmin } from '../../../lib/supabase/admin';
+import { createGitHubIssue, triggerGitHubAgent } from '../../../lib/github-issue';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -142,12 +143,6 @@ async function createGitHubMismatchIssue(payload: {
   reason?: string;
   flaggedBy?: string;
 }): Promise<{ issueCreated: boolean; issueNumber?: number; issueUrl?: string; reason?: string }> {
-  const token = process.env.GITHUB_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
-  if (!token) {
-    return { issueCreated: false, reason: 'GITHUB_DISPATCH_TOKEN not configured' };
-  }
-
-  const repo = process.env.GITHUB_REPO || 'Arjundevjha/PaperForge';
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
   const qImgUrl = supabaseUrl
     ? `${supabaseUrl}/storage/v1/object/public/paperforge/questions/${payload.questionId}.png`
@@ -178,39 +173,7 @@ async function createGitHubMismatchIssue(payload: {
     `Use the \`paperforge-mismatch-support\` skill: check \`docs/mismatch-patterns.md\`, fix the pairing/crop in local \`papers/\` + \`scripts/\`, sync to Supabase, document the root cause in \`docs/mismatch-triage-log.md\`, and close this issue.`,
   ].join('\n');
 
-  try {
-    const res = await fetch(`https://api.github.com/repos/${repo}/issues`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        title,
-        body,
-        labels: ['answer-mismatch'],
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      return {
-        issueCreated: false,
-        reason: `GitHub issue HTTP ${res.status}: ${text.slice(0, 120)}`,
-      };
-    }
-
-    const data = await res.json();
-    return {
-      issueCreated: true,
-      issueNumber: data.number,
-      issueUrl: data.html_url,
-    };
-  } catch (err: any) {
-    return { issueCreated: false, reason: err?.message || 'GitHub issue creation failed' };
-  }
+  return createGitHubIssue({ labels: ['answer-mismatch'], title, body });
 }
 
 async function triggerGitHubMismatchAgent(payload: {
@@ -219,39 +182,10 @@ async function triggerGitHubMismatchAgent(payload: {
   answerId?: string;
   reason?: string;
 }): Promise<{ dispatched: boolean; reason?: string }> {
-  const token = process.env.GITHUB_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
-  if (!token) {
-    return { dispatched: false, reason: 'GITHUB_DISPATCH_TOKEN not configured' };
-  }
-
-  const repo = process.env.GITHUB_REPO || 'Arjundevjha/PaperForge';
-  try {
-    const res = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        event_type: 'paperforge_fix_mismatch',
-        client_payload: payload,
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      return {
-        dispatched: false,
-        reason: `GitHub dispatch HTTP ${res.status}: ${text.slice(0, 120)}`,
-      };
-    }
-
-    return { dispatched: true };
-  } catch (err: any) {
-    return { dispatched: false, reason: err?.message || 'GitHub dispatch failed' };
-  }
+  return triggerGitHubAgent({
+    eventType: 'paperforge_fix_mismatch',
+    clientPayload: payload,
+  });
 }
 
 export async function POST(request: Request) {

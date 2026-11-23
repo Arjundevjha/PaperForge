@@ -1,12 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ReportQuestionPayloadSchema } from '../packages/shared/src/validation.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
+
+function read(relPath) {
+  return readFileSync(path.join(repoRoot, relPath), 'utf8');
+}
 
 test('ReportQuestionPayloadSchema accepts a valid report with default errorKind', () => {
   const parsed = ReportQuestionPayloadSchema.safeParse({
@@ -51,4 +56,24 @@ test('scripts/fix_flagged_answer.py compiles and responds to --help', () => {
   const out = execFileSync('python3', [scriptPath, '--help'], { encoding: 'utf8' });
   assert.match(out, /PaperForge Cloud Mismatch Auto-Fix Agent/);
   assert.match(out, /--sweep/);
+});
+
+test('POST /api/report-question route exists with a POST handler and error-report references', () => {
+  const src = read('apps/web/src/app/api/report-question/route.ts');
+  assert.match(src, /export async function POST/);
+  assert.match(src, /ReportQuestionPayloadSchema/);
+  assert.match(src, /'ERROR_REPORT'/);
+  assert.match(src, /addReviewItem/);
+});
+
+test('shared lib apps/web/src/lib/github-issue.ts exposes createGitHubIssue and triggerGitHubAgent', () => {
+  const src = read('apps/web/src/lib/github-issue.ts');
+  assert.match(src, /export async function createGitHubIssue/);
+  assert.match(src, /export async function triggerGitHubAgent/);
+});
+
+test('review route delegates to the shared github-issue lib', () => {
+  const src = read('apps/web/src/app/api/review/route.ts');
+  assert.match(src, /createGitHubIssue/);
+  assert.match(src, /triggerGitHubAgent/);
 });
