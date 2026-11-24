@@ -201,26 +201,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
       {/* Two Column Section: Recent Ingestion & System Health */}
       <div className="grid grid-cols-2 gap-6">
-        {/* Left: Source Documents Table */}
+        {/* Left: Source Documents Summary — compact, no 928-element list */}
         <div className="p-5 rounded-lg bg-surface-1 border border-border-subdued space-y-3">
           <h3 className="text-xs font-semibold text-[#f1f5f9] uppercase tracking-wider font-mono">
             Active Source Documents
           </h3>
-          <div className="divide-y divide-border-subdued text-xs">
-            {sources.map((s) => (
-              <div key={s.id} className="py-2.5 flex items-center justify-between font-mono">
-                <div>
-                  <div className="font-semibold text-[#dee2f1]">{s.filename}</div>
-                  <div className="text-[11px] text-[#64748b]">
-                    {s.school} • {s.year} • P{s.paperNumber} • SHA: {s.sourceHash.slice(0, 8)}...
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] bg-status-approved/20 text-status-approved border border-status-approved/30">
-                  {s.status}
-                </span>
-              </div>
-            ))}
+          <div className="text-xs text-[#64748b]">
+            <span className="font-mono text-[#f1f5f9]">{sources.length}</span>
+            {sources.length === 1 ? ' paper ingested' : sources.length > 1 ? `${sources.length} papers ingested` : 'No papers yet'}
           </div>
+          <p className="mt-1">
+            <a href="/sources" className="text-primary-cyan hover:underline font-mono">
+              View All Sources →
+            </a>{' '}
+            (manage ingestion, delete papers, reprocess extractions)
+          </p>
         </div>
 
         {/* Right: Operational Health Diagnostics */}

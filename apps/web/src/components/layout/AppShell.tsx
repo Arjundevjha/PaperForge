@@ -57,7 +57,11 @@ export const AppShell: React.FC<AppShellProps> = ({
         // ignore network error
       }
     };
-    fetchPendingReviews();
+    // Debounce: only fetch once per navigation, not on every render cycle
+    const timer = setTimeout(() => {
+      fetchPendingReviews();
+    }, 300);
+    return () => clearTimeout(timer);
   }, [pathname, isAdmin]);
 
   // Global Keyboard Shortcuts (Escape)

@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   if (supabase) {
     try {
-      let query = supabase.from('review_items').select('*').order('created_at', { ascending: false });
+      let query = supabase.from('review_items').select('*').order('created_at', { ascending: false }).limit(50);
       if (status) {
         query = query.eq('status', status);
       }
