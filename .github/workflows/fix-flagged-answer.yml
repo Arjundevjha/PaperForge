@@ -13,8 +13,9 @@ on:
         description: 'Optional mismatch reason'
         required: false
         type: string
-  schedule:
-    - cron: '0 */6 * * *'
+  # Disabled: local scheduled poller handles mismatch sweeping; uncomment if cloud secrets are configured
+  # schedule:
+  #   - cron: '0 */6 * * *'
 
 permissions:
   contents: read
